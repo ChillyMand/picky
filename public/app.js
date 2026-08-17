@@ -89,6 +89,19 @@ function showDirectMatch(match) { screen(`<div class="feedback-sticker">🍻</di
 async function lookupMatch() { const first = normalizePublicCode(document.querySelector('#first-match-code')?.value); const second = normalizePublicCode(document.querySelector('#second-match-code')?.value); if (!isPublicCode(first) || !isPublicCode(second) || first === second) return showToast('请输入两个不同的 5 位测试码'); const response = await fetch(`/api/matches?first=${first}&second=${second}`); const payload = await response.json(); if (!response.ok) return showToast(payload.error || '暂时无法查询'); showDirectMatch(payload); }
 async function lookupResultMatch() { const second = normalizePublicCode(document.querySelector('#result-friend-code')?.value); if (!isPublicCode(state.publicCode) || !isPublicCode(second) || state.publicCode === second) return showToast('请输入对方完整的 5 位测试码'); const response = await fetch(`/api/matches?first=${state.publicCode}&second=${second}`); const payload = await response.json(); if (!response.ok) return showToast(payload.error || '暂时无法查询'); state.match = { hostCode: payload.firstCode, guestCode: payload.secondCode, ...payload }; save(); showResult(); }
 async function shareResult() { const text = `${buildShareText(state.result)} 配对码：${state.publicCode}`; if (navigator.share) { try { await navigator.share({ title: '我的饭桌人格', text, url: pairUrl() }); return; } catch {} } await navigator.clipboard.writeText(`${text} ${pairUrl()}`); showToast('分享文案和配对链接已复制'); }
+function showImagePreview(imageUrl, filename) {
+  document.querySelector('.share-preview-overlay')?.remove();
+  const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+  const showDownload = !isWeChat && matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const overlay = document.createElement('div'); overlay.className = 'share-preview-overlay'; overlay.setAttribute('role', 'dialog'); overlay.setAttribute('aria-modal', 'true');
+  overlay.innerHTML = `<div class="share-preview-header"><h2>图片已生成</h2><p>长按图片保存到相册</p></div><div class="share-preview-image-wrap"><img class="share-preview-image" alt="饭桌人格分享图"></div><div class="share-preview-actions"><button type="button" data-preview-close>关闭</button>${showDownload ? '<a data-preview-download>下载图片</a>' : ''}</div>`;
+  overlay.querySelector('.share-preview-image').src = imageUrl;
+  const download = overlay.querySelector('[data-preview-download]'); if (download) { download.href = imageUrl; download.download = filename; }
+  const close = () => { overlay.remove(); document.body.classList.remove('share-preview-open'); };
+  overlay.querySelector('[data-preview-close]').addEventListener('click', close);
+  overlay.addEventListener('click', (event) => { if (event.target === overlay) close(); });
+  document.body.classList.add('share-preview-open'); document.body.append(overlay);
+}
 async function downloadCard() {
   if (!isPublicCode(state.publicCode)) return showToast('测试码生成中，请稍后重试');
   const card = buildShareCardModel(state.result, state.publicCode);
@@ -120,11 +133,8 @@ async function downloadCard() {
   context.fillStyle = '#322c27'; context.font = '900 43px ui-monospace, monospace'; context.fillText(card.publicCode, 0, 132);
   context.font = '700 20px sans-serif'; context.fillText('扫我测匹配度 ↗', 0, 170);
   context.restore();
-  canvas.toBlob((blob) => {
-    if (!blob) { showToast('人格卡生成失败，请重试'); return; }
-    const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = card.filename; link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }, 'image/jpeg', .92);
+  try { showImagePreview(canvas.toDataURL('image/jpeg', .92), card.filename); }
+  catch { showToast('人格卡生成失败，请重试'); }
 }
 
 app.addEventListener('click', async (event) => {

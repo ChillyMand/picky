@@ -14,6 +14,7 @@ test('user page exposes the complete test flow with visible answer copy and no i
   const css = await fetch(`${base}/styles.css`).then((response) => response.text());
   const touchCss = await fetch(`${base}/touch-fixes.css`).then((response) => response.text());
   const compactCss = await fetch(`${base}/intro-compact.css`).then((response) => response.text());
+  const previewCss = await fetch(`${base}/share-preview.css`).then((response) => response.text());
   const appJs = await fetch(`${base}/app.js`).then((response) => response.text());
   assert.match(html, /你到底有多挑食/);
   for (const label of ['超爱吃', '可以吃', '坚决不吃', '没吃过']) assert.match(html, new RegExp(label));
@@ -23,6 +24,7 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(html, /开始双人匹配/);
   assert.match(html, /touch-fixes\.css\?v=2/);
   assert.match(html, /intro-compact\.css\?v=1/);
+  assert.match(html, /share-preview\.css\?v=1/);
   assert.match(html, /直接查看匹配度/);
   assert.match(html, /我的测试码/);
   assert.match(html, /对方测试码/);
@@ -39,6 +41,10 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(appJs, /扫我测匹配度 ↗/);
   assert.match(appJs, />分享链接</);
   assert.match(appJs, />保存图片</);
+  assert.match(appJs, /canvas\.toDataURL\('image\/jpeg',\s*\.92\)/);
+  assert.match(appJs, /长按图片保存到相册/);
+  assert.match(appJs, /MicroMessenger/i);
+  assert.match(previewCss, /\.share-preview-overlay/);
   assert.match(compactCss, /max-height:\s*760px/);
   assert.match(compactCss, /\.intro-screen \.rules\s*\{[^}]*grid-template-columns:\s*1fr 1fr/);
   assert.doesNotMatch(appJs, /JSON\.parse\(localStorage\.getItem\(STORAGE_KEY\)\)/);

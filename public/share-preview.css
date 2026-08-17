@@ -1,0 +1,31 @@
+body.share-preview-open { overflow: hidden; }
+.share-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(34, 30, 27, .96);
+  color: #fff;
+  padding: max(14px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom));
+}
+.share-preview-header { width: min(100%, 520px); text-align: center; }
+.share-preview-header h2 { margin: 3px 0 4px; font-size: 20px; }
+.share-preview-header p { margin: 0 0 10px; color: #fff7e7; font-size: 14px; }
+.share-preview-image-wrap { flex: 1; min-height: 0; display: grid; place-items: center; width: 100%; }
+.share-preview-image {
+  display: block;
+  max-width: min(88vw, 430px);
+  max-height: calc(100vh - 150px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  width: auto;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 10px 35px rgba(0, 0, 0, .38);
+  -webkit-touch-callout: default;
+  user-select: auto;
+}
+.share-preview-actions { display: flex; gap: 10px; margin-top: 10px; }
+.share-preview-actions button,
+.share-preview-actions a { border: 2px solid #fff; border-radius: 999px; padding: 10px 18px; color: #322c27; background: #fff; font-weight: 900; text-decoration: none; }
+.share-preview-actions a { background: #dfff70; }
