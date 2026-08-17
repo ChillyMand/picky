@@ -64,4 +64,7 @@ test('a second test can join the first public code and produce a compatibility r
   assert.equal(directMatch.firstCode, first.publicCode);
   assert.equal(directMatch.secondCode, second.publicCode);
   assert.ok(directMatch.score > 0);
+  const archivedMatches = await fetch(`${base}/api/admin/matches`).then((response) => response.json());
+  assert.equal(archivedMatches.total, 1);
+  assert.equal(archivedMatches.items[0].viewCount, 2);
 });

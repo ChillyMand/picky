@@ -32,7 +32,7 @@ export function createAppServer({ archivePath = join(here, 'data/tests.json'), p
         await repo.upsertAnswer(match[1], { foodId: match[2], choice: input.choice, order: Number(input.order || 0), kind: input.kind || 'adaptive', durationMs: Number(input.durationMs || 0) }); response.writeHead(204); return response.end();
       }
       match = url.pathname.match(/^\/api\/sessions\/([^/]+)\/complete$/);
-      if (request.method === 'POST' && match) { const session = await repo.getSession(match[1]); if (!session) return json(response, 404, { error: '记录不存在' }); const result = scoreTest(session.answers); await repo.completeSession(match[1], result); let pairMatch = null; if (session.pairCode) { const host = await repo.getSessionByPublicCode(session.pairCode); if (host?.status === 'completed') pairMatch = { hostCode: host.publicCode, guestCode: session.publicCode, ...scoreCompatibility(host.answers, session.answers) }; } return json(response, 200, { result, match: pairMatch }); }
+      if (request.method === 'POST' && match) { const session = await repo.getSession(match[1]); if (!session) return json(response, 404, { error: '记录不存在' }); const result = scoreTest(session.answers); await repo.completeSession(match[1], result); let pairMatch = null; if (session.pairCode) { const host = await repo.getSessionByPublicCode(session.pairCode); if (host?.status === 'completed') { pairMatch = { hostCode: host.publicCode, guestCode: session.publicCode, ...scoreCompatibility(host.answers, session.answers) }; await repo.recordMatch({ firstCode: host.publicCode, secondCode: session.publicCode, ...pairMatch, source: 'invitation', ip: clientIp(request), userAgent: String(request.headers['user-agent'] || ''), device: parseDevice(String(request.headers['user-agent'] || '')) }); } } return json(response, 200, { result, match: pairMatch }); }
       match = url.pathname.match(/^\/api\/sessions\/([^/]+)\/public-code$/);
       if (request.method === 'GET' && match) { const session = await repo.ensurePublicCode(match[1]); return json(response, 200, { publicCode: session.publicCode }); }
       match = url.pathname.match(/^\/api\/pairs\/([^/]+)$/);
@@ -43,10 +43,13 @@ export function createAppServer({ archivePath = join(here, 'data/tests.json'), p
         const first = await repo.getSessionByPublicCode(firstCode); const second = await repo.getSessionByPublicCode(secondCode);
         if (!first || !second) return json(response, 404, { error: '没有找到对应的测试码' });
         if (first.status !== 'completed' || second.status !== 'completed') return json(response, 409, { error: '其中一份测试尚未完成' });
-        return json(response, 200, { firstCode, secondCode, ...scoreCompatibility(first.answers, second.answers) });
+        const report = { firstCode, secondCode, ...scoreCompatibility(first.answers, second.answers) };
+        await repo.recordMatch({ ...report, source: 'direct', ip: clientIp(request), userAgent: String(request.headers['user-agent'] || ''), device: parseDevice(String(request.headers['user-agent'] || '')) });
+        return json(response, 200, report);
       }
       if (request.method === 'GET' && url.pathname === '/api/admin/summary') return json(response, 200, await repo.summary());
       if (request.method === 'GET' && url.pathname === '/api/admin/sessions') return json(response, 200, await repo.listSessions({ status: url.searchParams.get('status') || undefined, personality: url.searchParams.get('personality') || undefined, query: url.searchParams.get('q') || '', page: Number(url.searchParams.get('page') || 1), pageSize: Math.min(100, Number(url.searchParams.get('pageSize') || 50)) }));
+      if (request.method === 'GET' && url.pathname === '/api/admin/matches') return json(response, 200, await repo.listMatches({ query: url.searchParams.get('q') || '', page: Number(url.searchParams.get('page') || 1), pageSize: Math.min(100, Number(url.searchParams.get('pageSize') || 50)) }));
       match = url.pathname.match(/^\/api\/admin\/sessions\/([^/]+)$/);
       if (request.method === 'GET' && match) { const session = await repo.getSession(match[1]); return session ? json(response, 200, session) : json(response, 404, { error: '记录不存在' }); }
       if (request.method !== 'GET' && request.method !== 'HEAD') return json(response, 404, { error: '未找到' });

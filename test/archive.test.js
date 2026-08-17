@@ -41,3 +41,19 @@ test('archive gives an existing legacy session a public code', async () => {
   const session = await createArchiveRepository(file).ensurePublicCode('legacy-session');
   assert.match(session.publicCode, /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{5}$/);
 });
+
+test('archive retains a unique pairing record and counts later views', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'picky-archive-'));
+  const repo = createArchiveRepository(join(dir, 'tests.json'));
+  const first = await repo.createSession({ visitorId: 'pair-first' });
+  const second = await repo.createSession({ visitorId: 'pair-second' });
+  const input = { firstCode: first.publicCode, secondCode: second.publicCode, score: 82, verdict: '很合拍', overlapCount: 10, sharedLikes: [{ id: 'pork' }], sharedAvoids: [], conflicts: [{ id: 'fish' }], source: 'direct', ip: '203.0.113.5' };
+  const created = await repo.recordMatch(input);
+  const viewed = await repo.recordMatch({ ...input, firstCode: second.publicCode, secondCode: first.publicCode });
+  assert.equal(created.id, viewed.id);
+  assert.equal(viewed.viewCount, 2);
+  const list = await repo.listMatches();
+  assert.equal(list.total, 1);
+  assert.equal(list.items[0].firstSessionId, first.id);
+  assert.deepEqual(list.items[0].sharedLikeIds, ['pork']);
+});

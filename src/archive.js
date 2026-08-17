@@ -52,6 +52,23 @@ export function createArchiveRepository(filePath) {
     async getSession(sessionId) { await writeQueue; const data = await load(); return structuredClone(data.sessions.find(({ id }) => id === sessionId) || null); },
     async getSessionByPublicCode(publicCode) { await writeQueue; const data = await load(); const code = normalizePublicCode(publicCode); return structuredClone(data.sessions.find((item) => item.publicCode === code) || null); },
     async getPairByHostCode(publicCode) { await writeQueue; const data = await load(); const code = normalizePublicCode(publicCode); const host = data.sessions.find((item) => item.publicCode === code); if (!host) return null; const guest = data.sessions.find((item) => item.pairCode === code && item.status === 'completed'); return { host: structuredClone(host), guest: structuredClone(guest || null) }; },
+    async recordMatch(input) {
+      return mutate((data) => {
+        data.matches ||= [];
+        const firstCode = normalizePublicCode(input.firstCode); const secondCode = normalizePublicCode(input.secondCode);
+        const existing = data.matches.find((item) => (item.firstCode === firstCode && item.secondCode === secondCode) || (item.firstCode === secondCode && item.secondCode === firstCode));
+        const now = new Date().toISOString();
+        if (existing) { existing.lastViewedAt = now; existing.viewCount = (existing.viewCount || 1) + 1; return existing; }
+        const first = data.sessions.find((item) => item.publicCode === firstCode); const second = data.sessions.find((item) => item.publicCode === secondCode);
+        const match = { id: randomUUID(), firstCode, secondCode, firstSessionId: first?.id || null, secondSessionId: second?.id || null, score: Number(input.score || 0), verdict: input.verdict || '', overlapCount: Number(input.overlapCount || 0), sharedLikeIds: (input.sharedLikes || []).map((food) => food.id), sharedAvoidIds: (input.sharedAvoids || []).map((food) => food.id), conflictIds: (input.conflicts || []).map((food) => food.id), source: input.source || 'direct', ip: input.ip || '', userAgent: input.userAgent || '', device: input.device || {}, createdAt: now, lastViewedAt: now, viewCount: 1 };
+        data.matches.unshift(match); return match;
+      });
+    },
+    async listMatches({ query = '', page = 1, pageSize = 50 } = {}) {
+      await writeQueue; const data = await load(); let items = data.matches || [];
+      if (query) { const needle = query.toLowerCase(); items = items.filter((item) => [item.id, item.firstCode, item.secondCode, item.ip].some((value) => String(value || '').toLowerCase().includes(needle))); }
+      const total = items.length; const start = (Math.max(1, page) - 1) * pageSize; return { items: structuredClone(items.slice(start, start + pageSize)), total, page, pageSize };
+    },
     async listSessions({ status, personality, query = '', page = 1, pageSize = 50 } = {}) {
       await writeQueue; const data = await load(); let items = data.sessions;
       if (status) items = items.filter((item) => item.status === status);
@@ -60,11 +77,11 @@ export function createArchiveRepository(filePath) {
       const total = items.length; const start = (Math.max(1, page) - 1) * pageSize; return { items: structuredClone(items.slice(start, start + pageSize)), total, page, pageSize };
     },
     async summary() {
-      await writeQueue; const { sessions } = await load(); const completed = sessions.filter((item) => item.status === 'completed');
+      await writeQueue; const { sessions, matches = [] } = await load(); const completed = sessions.filter((item) => item.status === 'completed');
       const answerCounts = { love: 0, okay: 0, refuse: 0, unknown: 0 }; sessions.flatMap((item) => item.answers).forEach(({ choice }) => { if (choice in answerCounts) answerCounts[choice]++; });
       const personalityCounts = {}; completed.forEach(({ result }) => { const name = result?.personality?.name || '未知'; personalityCounts[name] = (personalityCounts[name] || 0) + 1; });
       const completedDurations = completed.map((item) => new Date(item.completedAt) - new Date(item.startedAt)).filter((value) => value >= 0);
-      return { started: sessions.length, completed: completed.length, completionRate: sessions.length ? completed.length / sessions.length : 0, averageQuestions: completed.length ? completed.reduce((sum, item) => sum + item.answers.length, 0) / completed.length : 0, averageDurationMs: completedDurations.length ? completedDurations.reduce((a, b) => a + b, 0) / completedDurations.length : 0, answerCounts, personalityCounts };
+      return { started: sessions.length, completed: completed.length, matches: matches.length, completionRate: sessions.length ? completed.length / sessions.length : 0, averageQuestions: completed.length ? completed.reduce((sum, item) => sum + item.answers.length, 0) / completed.length : 0, averageDurationMs: completedDurations.length ? completedDurations.reduce((a, b) => a + b, 0) / completedDurations.length : 0, answerCounts, personalityCounts };
     },
   };
 }

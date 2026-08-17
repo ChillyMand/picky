@@ -3,13 +3,14 @@ import { formatDateTime } from '/modules/format.js';
 
 const $ = (selector) => document.querySelector(selector);
 let sessions = [];
+let matches = [];
 const choiceNames = { love: '😋 超爱吃', okay: '🙂 可以吃', refuse: '😖 坚决不吃', unknown: '❓ 没吃过' };
 const escapeHtml = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 function duration(ms) { const seconds = Math.round(ms / 1000); return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`; }
 
 async function loadSummary() {
   const summary = await fetch('/api/admin/summary').then((response) => response.json());
-  $('#kpi-started').textContent = summary.started; $('#kpi-rate').textContent = `${Math.round(summary.completionRate * 100)}%`; $('#kpi-completed').textContent = `${summary.completed} 次完成`; $('#kpi-questions').textContent = summary.averageQuestions.toFixed(1); $('#kpi-duration').textContent = duration(summary.averageDurationMs);
+  $('#kpi-started').textContent = summary.started; $('#kpi-rate').textContent = `${Math.round(summary.completionRate * 100)}%`; $('#kpi-completed').textContent = `${summary.completed} 次完成`; $('#kpi-matches').textContent = summary.matches || 0; $('#kpi-questions').textContent = summary.averageQuestions.toFixed(1); $('#kpi-duration').textContent = duration(summary.averageDurationMs);
   const total = Object.values(summary.answerCounts).reduce((a, b) => a + b, 0); $('#answer-total').textContent = `${total} 次选择`;
   $('#answer-bar').innerHTML = Object.entries(summary.answerCounts).map(([, count]) => `<i style="width:${total ? count / total * 100 : 0}%"></i>`).join('');
   $('#answer-legend').innerHTML = Object.entries(summary.answerCounts).map(([key, count]) => `<span>${choiceNames[key]} ${total ? Math.round(count / total * 100) : 0}%</span>`).join('');
@@ -23,6 +24,19 @@ async function loadSessions() {
   $('#empty').hidden = sessions.length > 0; $('#session-rows').innerHTML = sessions.map((session) => `<tr data-id="${session.id}"><td>${formatDateTime(session.startedAt)}</td><td><code>${escapeHtml(session.publicCode || session.id.slice(0, 8))}</code></td><td>${session.result ? `<span class="score">${session.result.pickyScore}</span> ${escapeHtml(session.result.personality.name)}` : '未生成结果'}</td><td>${escapeHtml(session.ip || '--')} · ${escapeHtml(session.device?.model || session.device?.type || '未知')} · ${escapeHtml(session.device?.browser || '未知')}</td><td>${session.answers.length}</td><td><span class="status ${session.status}">${session.status === 'completed' ? '已完成' : '进行中'}</span></td></tr>`).join('');
 }
 
+async function loadMatches() {
+  const params = new URLSearchParams(); if ($('#match-search').value.trim()) params.set('q', $('#match-search').value.trim());
+  const data = await fetch(`/api/admin/matches?${params}`).then((response) => response.json()); matches = data.items;
+  $('#match-empty').hidden = matches.length > 0; $('#match-rows').innerHTML = matches.map((match) => `<tr data-match-id="${match.id}"><td>${formatDateTime(match.createdAt)}</td><td><code>${escapeHtml(match.firstCode)}</code> × <code>${escapeHtml(match.secondCode)}</code></td><td><span class="score">${match.score}</span></td><td>${match.overlapCount}</td><td>${match.source === 'invitation' ? '邀请配对' : '双码查询'}</td><td>${match.viewCount || 1}</td></tr>`).join('');
+}
+
+function foodNames(ids = []) { return ids.map((id) => getFoodById(id)?.name || id).map(escapeHtml).join('、') || '暂无'; }
+function openMatchDetail(id) {
+  const match = matches.find((item) => item.id === id); if (!match) return;
+  $('#drawer-content').innerHTML = `<p class="eyebrow">MATCH DETAIL</p><h2>${escapeHtml(match.firstCode)} × ${escapeHtml(match.secondCode)}</h2><div class="score">${match.score}%</div><p>${escapeHtml(match.verdict)}</p><div class="detail-grid"><div class="detail-box"><small>生成时间</small><b>${formatDateTime(match.createdAt)}</b></div><div class="detail-box"><small>最近查看</small><b>${formatDateTime(match.lastViewedAt)}</b></div><div class="detail-box"><small>共同题数</small><b>${match.overlapCount}</b></div><div class="detail-box"><small>查看次数</small><b>${match.viewCount || 1}</b></div><div class="detail-box"><small>生成方式</small><b>${match.source === 'invitation' ? '邀请配对' : '双码查询'}</b></div><div class="detail-box"><small>查询 IP</small><b>${escapeHtml(match.ip || '--')}</b></div></div><h3>😋 都爱吃</h3><p class="raw">${foodNames(match.sharedLikeIds)}</p><h3>🤝 一起避开</h3><p class="raw">${foodNames(match.sharedAvoidIds)}</p><h3>⚡ 饭桌分歧</h3><p class="raw">${foodNames(match.conflictIds)}</p><h3>关联记录</h3><div class="detail-grid"><div class="detail-box"><small>${escapeHtml(match.firstCode)}</small><b>${escapeHtml(match.firstSessionId || '--')}</b></div><div class="detail-box"><small>${escapeHtml(match.secondCode)}</small><b>${escapeHtml(match.secondSessionId || '--')}</b></div></div>`;
+  $('#drawer').hidden = false; $('#drawer-backdrop').hidden = false; document.body.classList.add('drawer-open');
+}
+
 async function openDetail(id) {
   const session = await fetch(`/api/admin/sessions/${id}`).then((response) => response.json());
   const result = session.result;
@@ -31,7 +45,7 @@ async function openDetail(id) {
 }
 function closeDetail() { $('#drawer').hidden = true; $('#drawer-backdrop').hidden = true; document.body.classList.remove('drawer-open'); }
 function exportData() { const blob = new Blob([JSON.stringify(sessions, null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `picky-sessions-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(link.href); }
-async function refresh() { await Promise.all([loadSummary(), loadSessions()]); }
+async function refresh() { await Promise.all([loadSummary(), loadSessions(), loadMatches()]); }
 
-$('#refresh').addEventListener('click', refresh); $('#search-button').addEventListener('click', loadSessions); $('#status-filter').addEventListener('change', loadSessions); $('#search').addEventListener('keydown', (event) => { if (event.key === 'Enter') loadSessions(); }); $('#export').addEventListener('click', exportData); $('#session-rows').addEventListener('click', (event) => { const row = event.target.closest('tr[data-id]'); if (row) openDetail(row.dataset.id); }); $('#drawer-close').addEventListener('click', closeDetail); $('#drawer-backdrop').addEventListener('click', closeDetail);
+$('#refresh').addEventListener('click', refresh); $('#search-button').addEventListener('click', loadSessions); $('#status-filter').addEventListener('change', loadSessions); $('#search').addEventListener('keydown', (event) => { if (event.key === 'Enter') loadSessions(); }); $('#match-search-button').addEventListener('click', loadMatches); $('#match-search').addEventListener('keydown', (event) => { if (event.key === 'Enter') loadMatches(); }); $('#export').addEventListener('click', exportData); $('#session-rows').addEventListener('click', (event) => { const row = event.target.closest('tr[data-id]'); if (row) openDetail(row.dataset.id); }); $('#match-rows').addEventListener('click', (event) => { const row = event.target.closest('tr[data-match-id]'); if (row) openMatchDetail(row.dataset.matchId); }); $('#drawer-close').addEventListener('click', closeDetail); $('#drawer-backdrop').addEventListener('click', closeDetail);
 refresh();
