@@ -5,12 +5,13 @@ const $ = (selector) => document.querySelector(selector);
 let sessions = [];
 let matches = [];
 const choiceNames = { love: '😋 超爱吃', okay: '🙂 可以吃', refuse: '😖 坚决不吃', unknown: '❓ 没吃过' };
+const statusNames = { completed: '已完成', in_progress: '进行中', abandoned: '已中断' };
 const escapeHtml = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 function duration(ms) { const seconds = Math.round(ms / 1000); return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`; }
 
 async function loadSummary() {
   const summary = await fetch('/api/admin/summary').then((response) => response.json());
-  $('#kpi-started').textContent = summary.started; $('#kpi-rate').textContent = `${Math.round(summary.completionRate * 100)}%`; $('#kpi-completed').textContent = `${summary.completed} 次完成`; $('#kpi-matches').textContent = summary.matches || 0; $('#kpi-questions').textContent = summary.averageQuestions.toFixed(1); $('#kpi-duration').textContent = duration(summary.averageDurationMs);
+  $('#kpi-started').textContent = summary.started; $('#kpi-abandoned').textContent = `${summary.abandoned || 0} 次中断`; $('#kpi-rate').textContent = `${Math.round(summary.completionRate * 100)}%`; $('#kpi-completed').textContent = `${summary.completed} 次完成`; $('#kpi-matches').textContent = summary.matches || 0; $('#kpi-questions').textContent = summary.averageQuestions.toFixed(1); $('#kpi-duration').textContent = duration(summary.averageDurationMs);
   const total = Object.values(summary.answerCounts).reduce((a, b) => a + b, 0); $('#answer-total').textContent = `${total} 次选择`;
   $('#answer-bar').innerHTML = Object.entries(summary.answerCounts).map(([, count]) => `<i style="width:${total ? count / total * 100 : 0}%"></i>`).join('');
   $('#answer-legend').innerHTML = Object.entries(summary.answerCounts).map(([key, count]) => `<span>${choiceNames[key]} ${total ? Math.round(count / total * 100) : 0}%</span>`).join('');
@@ -21,7 +22,7 @@ async function loadSummary() {
 async function loadSessions() {
   const params = new URLSearchParams(); if ($('#status-filter').value) params.set('status', $('#status-filter').value); if ($('#search').value.trim()) params.set('q', $('#search').value.trim());
   const data = await fetch(`/api/admin/sessions?${params}`).then((response) => response.json()); sessions = data.items;
-  $('#empty').hidden = sessions.length > 0; $('#session-rows').innerHTML = sessions.map((session) => `<tr data-id="${session.id}"><td>${formatDateTime(session.startedAt)}</td><td><code>${escapeHtml(session.publicCode || session.id.slice(0, 8))}</code></td><td>${session.result ? `<span class="score">${session.result.pickyScore}</span> ${escapeHtml(session.result.personality.name)}` : '未生成结果'}</td><td>${escapeHtml(session.ip || '--')} · ${escapeHtml(session.device?.model || session.device?.type || '未知')} · ${escapeHtml(session.device?.browser || '未知')}</td><td>${session.answers.length}</td><td><span class="status ${session.status}">${session.status === 'completed' ? '已完成' : '进行中'}</span></td></tr>`).join('');
+  $('#empty').hidden = sessions.length > 0; $('#session-rows').innerHTML = sessions.map((session) => `<tr data-id="${session.id}"><td>${formatDateTime(session.startedAt)}</td><td><code>${escapeHtml(session.publicCode || session.id.slice(0, 8))}</code></td><td>${session.result ? `<span class="score">${session.result.pickyScore}</span> ${escapeHtml(session.result.personality.name)}` : '未生成结果'}</td><td>${escapeHtml(session.ip || '--')} · ${escapeHtml(session.device?.model || session.device?.type || '未知')} · ${escapeHtml(session.device?.browser || '未知')}</td><td>${session.answers.length}</td><td><span class="status ${session.status}">${statusNames[session.status] || session.status}</span></td></tr>`).join('');
 }
 
 async function loadMatches() {

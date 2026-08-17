@@ -2,6 +2,7 @@ import { scoreTest } from './src/scoring.js';
 import { scoreCompatibility } from './src/matching.js';
 import { parseDevice } from './src/device.js';
 import { createPublicCode, isPublicCode, normalizePublicCode } from './src/codes.js';
+import { withEffectiveSessionStatus } from './src/session-status.js';
 
 const choices = new Set(['love', 'okay', 'refuse', 'unknown']);
 const json = (payload, status = 200) => Response.json(payload, { status, headers: { 'cache-control': 'no-store' } });
@@ -61,7 +62,7 @@ async function directMatch(request, env, url) {
   const report = { firstCode, secondCode, ...scoreCompatibility(first.answers, second.answers) }; await recordMatch(env.DB, request, report, 'direct'); return json(report);
 }
 async function listSessions(env, url) {
-  const result = await env.DB.prepare('SELECT data FROM sessions ORDER BY started_at DESC LIMIT 500').all(); let items = result.results.map(sessionFrom); const status = url.searchParams.get('status'); const query = (url.searchParams.get('q') || '').toLowerCase();
+  const result = await env.DB.prepare('SELECT data FROM sessions ORDER BY started_at DESC LIMIT 500').all(); let items = result.results.map(sessionFrom).map((item) => withEffectiveSessionStatus(item)); const status = url.searchParams.get('status'); const query = (url.searchParams.get('q') || '').toLowerCase();
   if (status) items = items.filter((item) => item.status === status); if (query) items = items.filter((item) => [item.id, item.publicCode, item.pairCode, item.visitorId, item.userId, item.ip].some((value) => String(value || '').toLowerCase().includes(query)));
   const page = Math.max(1, Number(url.searchParams.get('page') || 1)); const pageSize = Math.min(100, Number(url.searchParams.get('pageSize') || 50)); return json({ items: items.slice((page - 1) * pageSize, page * pageSize), total: items.length, page, pageSize });
 }
@@ -69,7 +70,7 @@ async function listMatches(env, url) {
   const result = await env.DB.prepare('SELECT data FROM matches ORDER BY created_at DESC LIMIT 500').all(); let items = result.results.map(matchFrom); const query = (url.searchParams.get('q') || '').toLowerCase(); if (query) items = items.filter((item) => [item.id, item.firstCode, item.secondCode, item.ip].some((value) => String(value || '').toLowerCase().includes(query))); return json({ items, total: items.length, page: 1, pageSize: 500 });
 }
 async function summary(env) {
-  const result = await env.DB.prepare('SELECT data FROM sessions').all(); const sessions = result.results.map(sessionFrom); const completed = sessions.filter((item) => item.status === 'completed'); const matches = await env.DB.prepare('SELECT COUNT(*) AS count FROM matches').first(); const answerCounts = { love: 0, okay: 0, refuse: 0, unknown: 0 }; sessions.flatMap((item) => item.answers).forEach(({ choice }) => { if (choice in answerCounts) answerCounts[choice] += 1; }); const personalityCounts = {}; completed.forEach(({ result: score }) => { const name = score?.personality?.name || '未知'; personalityCounts[name] = (personalityCounts[name] || 0) + 1; }); const durations = completed.map((item) => new Date(item.completedAt) - new Date(item.startedAt)).filter((value) => value >= 0); return json({ started: sessions.length, completed: completed.length, matches: Number(matches?.count || 0), completionRate: sessions.length ? completed.length / sessions.length : 0, averageQuestions: completed.length ? completed.reduce((sum, item) => sum + item.answers.length, 0) / completed.length : 0, averageDurationMs: durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : 0, answerCounts, personalityCounts });
+  const result = await env.DB.prepare('SELECT data FROM sessions').all(); const sessions = result.results.map(sessionFrom).map((item) => withEffectiveSessionStatus(item)); const completed = sessions.filter((item) => item.status === 'completed'); const abandoned = sessions.filter((item) => item.status === 'abandoned'); const matches = await env.DB.prepare('SELECT COUNT(*) AS count FROM matches').first(); const answerCounts = { love: 0, okay: 0, refuse: 0, unknown: 0 }; sessions.flatMap((item) => item.answers).forEach(({ choice }) => { if (choice in answerCounts) answerCounts[choice] += 1; }); const personalityCounts = {}; completed.forEach(({ result: score }) => { const name = score?.personality?.name || '未知'; personalityCounts[name] = (personalityCounts[name] || 0) + 1; }); const durations = completed.map((item) => new Date(item.completedAt) - new Date(item.startedAt)).filter((value) => value >= 0); return json({ started: sessions.length, completed: completed.length, abandoned: abandoned.length, inProgress: sessions.length - completed.length - abandoned.length, matches: Number(matches?.count || 0), completionRate: sessions.length ? completed.length / sessions.length : 0, averageQuestions: completed.length ? completed.reduce((sum, item) => sum + item.answers.length, 0) / completed.length : 0, averageDurationMs: durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : 0, answerCounts, personalityCounts });
 }
 async function assets(request, env) { return env.ASSETS.fetch(request); }
 
@@ -86,7 +87,7 @@ export default {
       if (request.method === 'GET' && path === '/api/admin/summary') return summary(env);
       if (request.method === 'GET' && path === '/api/admin/sessions') return listSessions(env, url);
       if (request.method === 'GET' && path === '/api/admin/matches') return listMatches(env, url);
-      if (request.method === 'GET' && (match = path.match(/^\/api\/admin\/sessions\/([^/]+)$/))) { const session = await byId(env.DB, match[1]); return session ? json(session) : json({ error: '记录不存在' }, 404); }
+      if (request.method === 'GET' && (match = path.match(/^\/api\/admin\/sessions\/([^/]+)$/))) { const session = await byId(env.DB, match[1]); return session ? json(withEffectiveSessionStatus(session)) : json({ error: '记录不存在' }, 404); }
       if (path.startsWith('/api/')) return json({ error: '未找到' }, 404);
       return assets(request, env, url);
     } catch (error) { console.error(error); return json({ error: '服务器异常' }, 500); }

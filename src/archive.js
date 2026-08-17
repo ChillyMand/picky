@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createPublicCode, normalizePublicCode } from './codes.js';
+import { withEffectiveSessionStatus } from './session-status.js';
 
 export function createArchiveRepository(filePath) {
   let writeQueue = Promise.resolve();
@@ -70,18 +71,18 @@ export function createArchiveRepository(filePath) {
       const total = items.length; const start = (Math.max(1, page) - 1) * pageSize; return { items: structuredClone(items.slice(start, start + pageSize)), total, page, pageSize };
     },
     async listSessions({ status, personality, query = '', page = 1, pageSize = 50 } = {}) {
-      await writeQueue; const data = await load(); let items = data.sessions;
+      await writeQueue; const data = await load(); let items = data.sessions.map((item) => withEffectiveSessionStatus(item));
       if (status) items = items.filter((item) => item.status === status);
       if (personality) items = items.filter((item) => item.result?.personality?.id === personality);
       if (query) { const needle = query.toLowerCase(); items = items.filter((item) => [item.id, item.publicCode, item.pairCode, item.visitorId, item.userId, item.ip].some((value) => String(value || '').toLowerCase().includes(needle))); }
       const total = items.length; const start = (Math.max(1, page) - 1) * pageSize; return { items: structuredClone(items.slice(start, start + pageSize)), total, page, pageSize };
     },
     async summary() {
-      await writeQueue; const { sessions, matches = [] } = await load(); const completed = sessions.filter((item) => item.status === 'completed');
+      await writeQueue; const data = await load(); const matches = data.matches || []; const sessions = data.sessions.map((item) => withEffectiveSessionStatus(item)); const completed = sessions.filter((item) => item.status === 'completed'); const abandoned = sessions.filter((item) => item.status === 'abandoned');
       const answerCounts = { love: 0, okay: 0, refuse: 0, unknown: 0 }; sessions.flatMap((item) => item.answers).forEach(({ choice }) => { if (choice in answerCounts) answerCounts[choice]++; });
       const personalityCounts = {}; completed.forEach(({ result }) => { const name = result?.personality?.name || '未知'; personalityCounts[name] = (personalityCounts[name] || 0) + 1; });
       const completedDurations = completed.map((item) => new Date(item.completedAt) - new Date(item.startedAt)).filter((value) => value >= 0);
-      return { started: sessions.length, completed: completed.length, matches: matches.length, completionRate: sessions.length ? completed.length / sessions.length : 0, averageQuestions: completed.length ? completed.reduce((sum, item) => sum + item.answers.length, 0) / completed.length : 0, averageDurationMs: completedDurations.length ? completedDurations.reduce((a, b) => a + b, 0) / completedDurations.length : 0, answerCounts, personalityCounts };
+      return { started: sessions.length, completed: completed.length, abandoned: abandoned.length, inProgress: sessions.length - completed.length - abandoned.length, matches: matches.length, completionRate: sessions.length ? completed.length / sessions.length : 0, averageQuestions: completed.length ? completed.reduce((sum, item) => sum + item.answers.length, 0) / completed.length : 0, averageDurationMs: completedDurations.length ? completedDurations.reduce((a, b) => a + b, 0) / completedDurations.length : 0, answerCounts, personalityCounts };
     },
   };
 }

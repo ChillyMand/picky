@@ -6,6 +6,7 @@ import { createArchiveRepository } from './src/archive.js';
 import { parseDevice } from './src/device.js';
 import { scoreTest } from './src/scoring.js';
 import { normalizePublicCode, isPublicCode } from './src/codes.js';
+import { withEffectiveSessionStatus } from './src/session-status.js';
 import { scoreCompatibility } from './src/matching.js';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -51,7 +52,7 @@ export function createAppServer({ archivePath = join(here, 'data/tests.json'), p
       if (request.method === 'GET' && url.pathname === '/api/admin/sessions') return json(response, 200, await repo.listSessions({ status: url.searchParams.get('status') || undefined, personality: url.searchParams.get('personality') || undefined, query: url.searchParams.get('q') || '', page: Number(url.searchParams.get('page') || 1), pageSize: Math.min(100, Number(url.searchParams.get('pageSize') || 50)) }));
       if (request.method === 'GET' && url.pathname === '/api/admin/matches') return json(response, 200, await repo.listMatches({ query: url.searchParams.get('q') || '', page: Number(url.searchParams.get('page') || 1), pageSize: Math.min(100, Number(url.searchParams.get('pageSize') || 50)) }));
       match = url.pathname.match(/^\/api\/admin\/sessions\/([^/]+)$/);
-      if (request.method === 'GET' && match) { const session = await repo.getSession(match[1]); return session ? json(response, 200, session) : json(response, 404, { error: '记录不存在' }); }
+      if (request.method === 'GET' && match) { const session = await repo.getSession(match[1]); return session ? json(response, 200, withEffectiveSessionStatus(session)) : json(response, 404, { error: '记录不存在' }); }
       if (request.method !== 'GET' && request.method !== 'HEAD') return json(response, 404, { error: '未找到' });
       let pathname = decodeURIComponent(url.pathname); if (pathname === '/') pathname = '/index.html'; if (pathname === '/admin' || pathname === '/admin/') pathname = '/admin/index.html';
       const moduleRequest = pathname.startsWith('/modules/');
