@@ -2,14 +2,14 @@ import { getFoodById } from '/modules/foods.js';
 import { createInitialQueue, selectFollowUps, buildQuestionQueue } from '/modules/adaptive.js';
 import { buildShareText, buildShareCardModel } from '/modules/share.js';
 import { normalizePublicCode, isPublicCode } from '/modules/codes.js';
+import { createVisitorId } from '/modules/browser-compat.js';
 
 const app = document.querySelector('#app');
 const CHOICES = [
   ['love', '😋', '超爱吃'], ['okay', '🙂', '可以吃'], ['refuse', '😖', '坚决不吃'], ['unknown', '❓', '没吃过'],
 ];
 const STORAGE_KEY = 'picky-test-progress-v1';
-const visitorId = localStorage.getItem('picky-visitor-id') || crypto.randomUUID();
-localStorage.setItem('picky-visitor-id', visitorId);
+const visitorId = createVisitorId(globalThis.localStorage);
 let state = { sessionId: null, publicCode: null, pairCode: null, match: null, answers: [], queue: buildQuestionQueue([]), index: 0, result: null };
 let pendingPairCode = normalizePublicCode(new URLSearchParams(location.search).get('pair'));
 let pendingWrites = [];
