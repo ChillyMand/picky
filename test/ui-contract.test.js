@@ -12,6 +12,7 @@ test('user page exposes the complete test flow with visible answer copy and no i
   const base = `http://127.0.0.1:${app.address().port}`;
   const html = await fetch(base).then((response) => response.text());
   const css = await fetch(`${base}/styles.css`).then((response) => response.text());
+  const touchCss = await fetch(`${base}/touch-fixes.css`).then((response) => response.text());
   const appJs = await fetch(`${base}/app.js`).then((response) => response.text());
   assert.match(html, /你到底有多挑食/);
   for (const label of ['超爱吃', '可以吃', '坚决不吃', '没吃过']) assert.match(html, new RegExp(label));
@@ -19,11 +20,14 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(html, /name="viewport"/);
   assert.match(html, /输入好友配对码/);
   assert.match(html, /开始双人匹配/);
+  assert.match(html, /touch-fixes\.css\?v=2/);
   assert.match(html, /直接查看匹配度/);
   assert.match(html, /我的测试码/);
   assert.match(html, /对方测试码/);
   assert.match(css, /color:\s*var\(--ink\)/);
   assert.match(css, /prefers-reduced-motion/);
+  assert.match(touchCss, /@media\s*\(hover:\s*none\)/);
+  assert.match(touchCss, /\.answer-button:hover[^}]*background:\s*var\(--paper\)/);
   assert.match(appJs, /isPublicCode\(pendingPairCode\).*showIntro/s);
 });
 

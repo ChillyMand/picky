@@ -1,0 +1,6 @@
+.answer-button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+@media (hover:none){
+  .answer-button:hover,.answer-button[data-choice="refuse"]:hover{background:var(--paper);box-shadow:none;transform:none}
+  .answer-button:active{background:var(--blue);box-shadow:1px 1px 0 var(--line);transform:translate(3px,3px)}
+  .answer-button[data-choice="refuse"]:active{background:var(--pink)}
+}
