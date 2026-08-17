@@ -1,0 +1,31 @@
+@media (max-width: 480px) {
+  .intro-screen {
+    justify-content: flex-start;
+    padding-top: max(14px, env(safe-area-inset-top));
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+  }
+  .intro-screen .rice-character { font-size: 54px; }
+  .intro-screen h1 { font-size: 30px; margin: 10px 0 5px; }
+  .intro-screen > .intro-copy { margin: 0; font-size: 14px; line-height: 1.4; }
+  .intro-screen .rules { grid-template-columns: 1fr 1fr; gap: 7px; margin: 14px 0; }
+  .intro-screen .rule { padding: 9px; font-size: 14px; }
+  .intro-screen .rule small { display: block; font-size: 12px; line-height: 1.25; }
+  .intro-screen .friendly-note { margin-bottom: 14px; padding: 7px; font-size: 14px; }
+  .intro-screen .primary-button { padding: 14px; }
+  .intro-screen .secondary-button { margin-top: 12px; }
+  .intro-screen .pair-banner { margin-bottom: 10px; padding: 8px 11px; font-size: 13px; }
+}
+
+@media (max-width: 480px) and (max-height: 760px) {
+  .intro-screen {
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+  .intro-screen .rice-character { font-size: 42px; }
+  .intro-screen h1 { margin: 6px 0 3px; font-size: 27px; }
+  .intro-screen .rules { margin: 9px 0; gap: 6px; }
+  .intro-screen .rule { padding: 7px; }
+  .intro-screen .friendly-note { margin-bottom: 10px; padding: 6px; }
+  .intro-screen .primary-button { padding: 12px; }
+  .intro-screen .secondary-button { display: none; }
+}
