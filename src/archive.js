@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { createPublicCode, normalizePublicCode } from './codes.js';
 
 export function createArchiveRepository(filePath) {
   let writeQueue = Promise.resolve();
@@ -23,7 +24,8 @@ export function createArchiveRepository(filePath) {
     async createSession(input) {
       return mutate((data) => {
         const now = new Date().toISOString();
-        const session = { id: randomUUID(), visitorId: input.visitorId || randomUUID(), userId: null, ip: input.ip || '', userAgent: input.userAgent || '', device: input.device || {}, viewport: input.viewport || {}, language: input.language || '', timezone: input.timezone || '', referrer: input.referrer || '', status: 'in_progress', startedAt: now, updatedAt: now, completedAt: null, answers: [], result: null };
+        let publicCode; do { publicCode = createPublicCode(); } while (data.sessions.some((item) => item.publicCode === publicCode));
+        const session = { id: randomUUID(), publicCode, pairCode: normalizePublicCode(input.pairCode) || null, visitorId: input.visitorId || randomUUID(), userId: null, ip: input.ip || '', userAgent: input.userAgent || '', device: input.device || {}, viewport: input.viewport || {}, language: input.language || '', timezone: input.timezone || '', referrer: input.referrer || '', status: 'in_progress', startedAt: now, updatedAt: now, completedAt: null, answers: [], result: null };
         data.sessions.unshift(session); return session;
       });
     },
@@ -40,12 +42,21 @@ export function createArchiveRepository(filePath) {
     async completeSession(sessionId, result) {
       return mutate((data) => { const session = data.sessions.find(({ id }) => id === sessionId); if (!session) throw Object.assign(new Error('Session not found'), { statusCode: 404 }); const now = new Date().toISOString(); Object.assign(session, { status: 'completed', result, completedAt: now, updatedAt: now }); return session; });
     },
+    async ensurePublicCode(sessionId) {
+      return mutate((data) => {
+        const session = data.sessions.find(({ id }) => id === sessionId); if (!session) throw Object.assign(new Error('Session not found'), { statusCode: 404 });
+        if (!session.publicCode) { let publicCode; do { publicCode = createPublicCode(); } while (data.sessions.some((item) => item.publicCode === publicCode)); session.publicCode = publicCode; }
+        return session;
+      });
+    },
     async getSession(sessionId) { await writeQueue; const data = await load(); return structuredClone(data.sessions.find(({ id }) => id === sessionId) || null); },
+    async getSessionByPublicCode(publicCode) { await writeQueue; const data = await load(); const code = normalizePublicCode(publicCode); return structuredClone(data.sessions.find((item) => item.publicCode === code) || null); },
+    async getPairByHostCode(publicCode) { await writeQueue; const data = await load(); const code = normalizePublicCode(publicCode); const host = data.sessions.find((item) => item.publicCode === code); if (!host) return null; const guest = data.sessions.find((item) => item.pairCode === code && item.status === 'completed'); return { host: structuredClone(host), guest: structuredClone(guest || null) }; },
     async listSessions({ status, personality, query = '', page = 1, pageSize = 50 } = {}) {
       await writeQueue; const data = await load(); let items = data.sessions;
       if (status) items = items.filter((item) => item.status === status);
       if (personality) items = items.filter((item) => item.result?.personality?.id === personality);
-      if (query) { const needle = query.toLowerCase(); items = items.filter((item) => [item.id, item.visitorId, item.userId, item.ip].some((value) => String(value || '').toLowerCase().includes(needle))); }
+      if (query) { const needle = query.toLowerCase(); items = items.filter((item) => [item.id, item.publicCode, item.pairCode, item.visitorId, item.userId, item.ip].some((value) => String(value || '').toLowerCase().includes(needle))); }
       const total = items.length; const start = (Math.max(1, page) - 1) * pageSize; return { items: structuredClone(items.slice(start, start + pageSize)), total, page, pageSize };
     },
     async summary() {

@@ -1,6 +1,7 @@
 import { getFoodById } from '/modules/foods.js';
 import { createInitialQueue, selectFollowUps, buildQuestionQueue } from '/modules/adaptive.js';
 import { buildShareText, buildShareCardModel } from '/modules/share.js';
+import { normalizePublicCode, isPublicCode } from '/modules/codes.js';
 
 const app = document.querySelector('#app');
 const CHOICES = [
@@ -9,7 +10,8 @@ const CHOICES = [
 const STORAGE_KEY = 'picky-test-progress-v1';
 const visitorId = localStorage.getItem('picky-visitor-id') || crypto.randomUUID();
 localStorage.setItem('picky-visitor-id', visitorId);
-let state = { sessionId: null, answers: [], queue: buildQuestionQueue([]), index: 0, result: null };
+let state = { sessionId: null, publicCode: null, pairCode: null, match: null, answers: [], queue: buildQuestionQueue([]), index: 0, result: null };
+let pendingPairCode = normalizePublicCode(new URLSearchParams(location.search).get('pair'));
 let pendingWrites = [];
 let questionStartedAt = Date.now();
 
@@ -20,13 +22,13 @@ function screen(content, className = '') { app.innerHTML = `<section class="scre
 function showToast(message) { const node = document.createElement('div'); node.className = 'toast'; node.textContent = message; document.body.append(node); setTimeout(() => node.remove(), 1800); }
 
 function showIntro() {
-  screen(`<div class="rice-character">🍙</div><h1>先对一下暗号</h1><p class="intro-copy">不考虑具体做法，只回答你平时愿不愿意吃。</p><div class="rules">${CHOICES.map(([, emoji, label], index) => `<div class="rule"><strong>${emoji} ${label}</strong><small>${['看到会主动夹', '有就吃，没有也行', '会挑出来或直接拒绝', '暂时无法判断'][index]}</small></div>`).join('')}</div><div class="friendly-note">没有正确答案，挑食也不扣饭票。</div><button class="primary-button" data-action="start">我准备好了 →</button><button class="secondary-button" data-action="home">返回首页</button>`, 'intro-screen');
+  screen(`${pendingPairCode ? `<div class="pair-banner">正在加入配对 <strong>${escapeHtml(pendingPairCode)}</strong>，完成测试即可查看你们的匹配度。</div>` : ''}<div class="rice-character">🍙</div><h1>先对一下暗号</h1><p class="intro-copy">不考虑具体做法，只回答你平时愿不愿意吃。</p><div class="rules">${CHOICES.map(([, emoji, label], index) => `<div class="rule"><strong>${emoji} ${label}</strong><small>${['看到会主动夹', '有就吃，没有也行', '会挑出来或直接拒绝', '暂时无法判断'][index]}</small></div>`).join('')}</div><div class="friendly-note">没有正确答案，挑食也不扣饭票。</div><button class="primary-button" data-action="start">${pendingPairCode ? '开始配对测试' : '我准备好了'} →</button><button class="secondary-button" data-action="home">返回首页</button>`, 'intro-screen');
 }
 
 async function createSession() {
-  const response = await fetch('/api/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ visitorId, viewport: { width: innerWidth, height: innerHeight, pixelRatio: devicePixelRatio }, language: navigator.language, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, referrer: document.referrer }) });
+  const response = await fetch('/api/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ visitorId, pairCode: pendingPairCode || null, viewport: { width: innerWidth, height: innerHeight, pixelRatio: devicePixelRatio }, language: navigator.language, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, referrer: document.referrer }) });
   if (!response.ok) throw new Error('暂时无法开始');
-  const session = await response.json(); state = { sessionId: session.id, answers: [], queue: buildQuestionQueue([]), index: 0, result: null }; save(); showQuestion();
+  const session = await response.json(); state = { sessionId: session.id, publicCode: session.publicCode, pairCode: session.pairCode, match: null, answers: [], queue: buildQuestionQueue([]), index: 0, result: null }; save(); showQuestion();
 }
 
 function questionCopy(food) {
@@ -66,19 +68,25 @@ function showFeedback() {
 
 async function finish() {
   screen(`<div class="feedback-sticker">🍚</div><h1>正在检查你的饭碗</h1><p>定位口感雷区·分析饭桌人格</p><div class="loading-dots"><i></i><i></i><i></i></div>`, 'loading-screen');
-  try { await Promise.allSettled(pendingWrites); const response = await fetch(`/api/sessions/${state.sessionId}/complete`, { method: 'POST' }); if (!response.ok) throw new Error(); state.result = (await response.json()).result; save(); setTimeout(showResult, 650); }
+  try { await Promise.allSettled(pendingWrites); const response = await fetch(`/api/sessions/${state.sessionId}/complete`, { method: 'POST' }); if (!response.ok) throw new Error(); const completed = await response.json(); state.result = completed.result; state.match = completed.match; save(); setTimeout(showResult, 650); }
   catch { screen(`<div class="feedback-sticker">🍚</div><h1>饭碗检查暂停了一下</h1><p>你的选择还在，重试即可。</p><button class="primary-button" data-action="finish">重新生成结果</button>`, 'feedback-screen'); }
 }
 
 const dimensionLabels = { variety: '食材接受', odor: '气味耐受', texture: '口感包容', appearance: '外观接受', seafood: '水产友好', exploration: '探索意愿' };
 function showResult() {
   const result = state.result; if (!result) return finish();
-  screen(`<div class="result-hero"><span class="result-label">你的饭桌人格是</span><h1>${escapeHtml(result.personality.name)}</h1><div class="score-orb"><div><strong>${result.pickyScore}</strong><small>挑食指数</small></div></div><div class="tags">${result.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}</div></div><div class="result-card"><p class="verdict">${escapeHtml(result.verdict)}</p>${result.easterEgg ? `<p class="easter">🎉 ${escapeHtml(result.easterEgg)}</p>` : ''}<p class="lead" style="text-align:left">挑食指数反映你的饮食边界，不代表饮食健康程度。</p></div><div class="result-card"><h2>你的饭碗边界</h2><div class="dimensions">${Object.entries(result.dimensions).map(([key, value]) => `<div class="dimension-row"><span>${dimensionLabels[key]}</span><span class="dimension-track"><i style="width:${value}%"></i></span><b>${value}</b></div>`).join('')}</div></div><div class="share-card" id="share-card"><small>MY TABLE PERSONALITY</small><h2>${escapeHtml(result.personality.name)}</h2><div class="share-score">${result.pickyScore}</div><p>${result.tags.map(escapeHtml).join(' · ')}</p><p>${escapeHtml(result.verdict)}</p><b>你和我能吃到一桌吗？</b></div><div class="share-actions"><button data-action="share">分享结果</button><button data-action="download">保存人格卡</button></div><button class="secondary-button" data-action="restart">重新测一次</button>`, 'result-screen');
+  const match = state.match;
+  const pairSection = match ? `<div class="result-card pair-report"><h2>你们的饭桌匹配度</h2><div class="pair-score">${match.score}%</div><p class="verdict">${escapeHtml(match.verdict)}</p><p>共同回答 ${match.overlapCount} 道题</p><div class="pair-lists"><div><h3>😋 都爱吃</h3><p>${match.sharedLikes.map((food) => escapeHtml(food.name)).join('、') || '暂时没有'}</p></div><div><h3>🤝 一起避开</h3><p>${match.sharedAvoids.map((food) => escapeHtml(food.name)).join('、') || '暂时没有'}</p></div><div><h3>⚡ 饭桌分歧</h3><p>${match.conflicts.map((food) => escapeHtml(food.name)).join('、') || '几乎没有'}</p></div></div></div>` : `<div class="pair-code-card"><small>你的测试 ID · 好友配对码</small><strong>${escapeHtml(state.publicCode || '-----')}</strong><p>好友输入这个码完成测试后，就能生成你们的饭桌匹配度。</p><div class="pair-actions"><button data-action="copy-pair">复制配对码</button><button data-action="check-pair">查看匹配结果</button></div></div>`;
+  screen(`<div class="result-hero"><span class="result-label">你的饭桌人格是</span><h1>${escapeHtml(result.personality.name)}</h1><div class="score-orb"><div><strong>${result.pickyScore}</strong><small>挑食指数</small></div></div><div class="tags">${result.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}</div></div>${pairSection}<div class="result-card"><p class="verdict">${escapeHtml(result.verdict)}</p>${result.easterEgg ? `<p class="easter">🎉 ${escapeHtml(result.easterEgg)}</p>` : ''}<p class="lead" style="text-align:left">挑食指数反映你的饮食边界，不代表饮食健康程度。</p></div><div class="result-card"><h2>你的饭碗边界</h2><div class="dimensions">${Object.entries(result.dimensions).map(([key, value]) => `<div class="dimension-row"><span>${dimensionLabels[key]}</span><span class="dimension-track"><i style="width:${value}%"></i></span><b>${value}</b></div>`).join('')}</div></div><div class="share-card" id="share-card"><small>MY TABLE PERSONALITY</small><h2>${escapeHtml(result.personality.name)}</h2><div class="share-score">${result.pickyScore}</div><p>${result.tags.map(escapeHtml).join(' · ')}</p><p>${escapeHtml(result.verdict)}</p><b>配对码 ${escapeHtml(state.publicCode || '-----')}</b></div><div class="share-actions"><button data-action="share">分享结果</button><button data-action="download">保存人格卡</button></div><button class="secondary-button" data-action="restart">重新测一次</button>`, 'result-screen');
 }
 
-async function shareResult() { const text = buildShareText(state.result); if (navigator.share) { try { await navigator.share({ title: '我的饭桌人格', text, url: location.origin }); return; } catch {} } await navigator.clipboard.writeText(`${text} ${location.origin}`); showToast('分享文案已复制'); }
+function pairUrl() { return `${location.origin}/?pair=${encodeURIComponent(state.publicCode || '')}`; }
+async function copyPair() { await navigator.clipboard.writeText(`${state.publicCode}\n${pairUrl()}`); showToast('配对码和邀请链接已复制'); }
+async function checkPair() { const response = await fetch(`/api/pairs/${state.publicCode}`); if (!response.ok) return showToast('暂时无法查询'); const report = await response.json(); if (report.waiting) return showToast('好友完成测试后即可查看'); state.match = report; save(); showResult(); }
+async function joinPair() { const input = document.querySelector('#pair-code-input'); const code = normalizePublicCode(input?.value); if (!isPublicCode(code)) return showToast('请输入完整的 5 位配对码'); const response = await fetch(`/api/pairs/${code}`); if (!response.ok) return showToast('没有找到这个配对码'); pendingPairCode = code; history.replaceState(null, '', `/?pair=${code}`); showIntro(); }
+async function shareResult() { const text = `${buildShareText(state.result)} 配对码：${state.publicCode}`; if (navigator.share) { try { await navigator.share({ title: '我的饭桌人格', text, url: pairUrl() }); return; } catch {} } await navigator.clipboard.writeText(`${text} ${pairUrl()}`); showToast('分享文案和配对链接已复制'); }
 function downloadCard() {
-  const card = buildShareCardModel(state.result, state.sessionId);
+  const card = buildShareCardModel(state.result, state.publicCode || state.sessionId);
   const canvas = document.createElement('canvas'); canvas.width = card.width; canvas.height = card.height;
   const context = canvas.getContext('2d'); context.fillStyle = '#322c27'; context.fillRect(0, 0, card.width, card.height);
   context.fillStyle = '#dfff70'; context.beginPath(); context.arc(940, 70, 230, 0, Math.PI * 2); context.fill();
@@ -91,8 +99,9 @@ function downloadCard() {
   const words = [...card.verdict]; const lines = []; let line = '';
   for (const word of words) { const next = line + word; if (context.measureText(next).width > 800) { lines.push(line); line = word; } else line = next; }
   if (line) lines.push(line); lines.slice(0, 3).forEach((text, index) => context.fillText(text, 540, 1060 + index * 60));
-  context.font = '700 30px sans-serif'; context.fillText('你和我能吃到一桌吗？', 540, 1320);
-  context.textAlign = 'right'; context.fillStyle = '#8f8983'; context.font = '24px ui-monospace, monospace'; context.fillText(card.shortId, 1010, 1385);
+  context.fillStyle = '#dfff70'; context.fillRect(260, 1260, 560, 120);
+  context.fillStyle = '#322c27'; context.font = '700 24px sans-serif'; context.fillText('测试 ID · 好友配对码', 540, 1300);
+  context.font = '900 52px ui-monospace, monospace'; context.fillText(card.shortId.replace('#', ''), 540, 1360);
   canvas.toBlob((blob) => {
     if (!blob) { showToast('人格卡生成失败，请重试'); return; }
     const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = card.filename; link.click();
@@ -103,7 +112,8 @@ function downloadCard() {
 app.addEventListener('click', async (event) => {
   const choiceButton = event.target.closest('[data-choice]'); if (choiceButton) return answer(choiceButton.dataset.choice);
   const action = event.target.closest('[data-action]')?.dataset.action;
-  if (action === 'show-intro') showIntro(); else if (action === 'home') location.reload(); else if (action === 'start') { try { await createSession(); } catch { showToast('暂时无法开始，请重试'); } } else if (action === 'continue') showQuestion(); else if (action === 'back') { state.index = Math.max(0, state.index - 1); showQuestion(); } else if (action === 'finish') finish(); else if (action === 'share') shareResult(); else if (action === 'download') downloadCard(); else if (action === 'restart') { clear(); showIntro(); }
+  if (action === 'show-intro') showIntro(); else if (action === 'join-pair') joinPair(); else if (action === 'home') location.href = '/'; else if (action === 'start') { try { await createSession(); } catch { showToast('暂时无法开始，请重试'); } } else if (action === 'continue') showQuestion(); else if (action === 'back') { state.index = Math.max(0, state.index - 1); showQuestion(); } else if (action === 'finish') finish(); else if (action === 'share') shareResult(); else if (action === 'copy-pair') copyPair(); else if (action === 'check-pair') checkPair(); else if (action === 'download') downloadCard(); else if (action === 'restart') { clear(); pendingPairCode = ''; history.replaceState(null, '', '/'); showIntro(); }
 });
 
-try { const restored = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (restored?.sessionId && restored.result) { state = restored; showResult(); } else if (restored?.sessionId && restored.queue?.length) { state = restored; showQuestion(); } } catch { clear(); }
+try { const restored = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (restored?.sessionId && restored.result) { state = restored; if (!state.publicCode) { fetch(`/api/sessions/${state.sessionId}/public-code`).then((response) => response.json()).then(({ publicCode }) => { state.publicCode = publicCode; save(); showResult(); }); } showResult(); } else if (restored?.sessionId && restored.queue?.length) { state = restored; showQuestion(); } } catch { clear(); }
+const pairInput = document.querySelector('#pair-code-input'); if (pairInput && pendingPairCode) pairInput.value = pendingPairCode;

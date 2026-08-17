@@ -39,3 +39,25 @@ test('API rejects invalid choices with a 400 response', async (t) => {
   const response = await fetch(`${base}/api/sessions/${session.id}/answers/pork`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ choice: 'maybe' }) });
   assert.equal(response.status, 400);
 });
+
+test('a second test can join the first public code and produce a compatibility report', async (t) => {
+  const { app, base } = await start(); t.after(() => app.close());
+  async function create(visitorId, pairCode) {
+    return fetch(`${base}/api/sessions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ visitorId, pairCode }) }).then((response) => response.json());
+  }
+  async function answer(session, foodId, choice, order) {
+    await fetch(`${base}/api/sessions/${session.id}/answers/${foodId}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ choice, order, kind: 'initial' }) });
+  }
+  const first = await create('pair-a');
+  assert.match(first.publicCode, /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{5}$/);
+  await answer(first, 'pork', 'love', 1); await answer(first, 'fish', 'refuse', 2);
+  await fetch(`${base}/api/sessions/${first.id}/complete`, { method: 'POST' });
+  const second = await create('pair-b', first.publicCode);
+  assert.equal(second.pairCode, first.publicCode);
+  await answer(second, 'pork', 'love', 1); await answer(second, 'fish', 'love', 2);
+  const completed = await fetch(`${base}/api/sessions/${second.id}/complete`, { method: 'POST' }).then((response) => response.json());
+  assert.equal(completed.match.hostCode, first.publicCode);
+  assert.ok(completed.match.score > 0);
+  const publicMatch = await fetch(`${base}/api/pairs/${first.publicCode}`).then((response) => response.json());
+  assert.equal(publicMatch.guestCode, second.publicCode);
+});

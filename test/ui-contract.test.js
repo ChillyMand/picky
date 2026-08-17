@@ -16,6 +16,8 @@ test('user page exposes the complete test flow with visible answer copy and no i
   for (const label of ['超爱吃', '可以吃', '坚决不吃', '没吃过']) assert.match(html, new RegExp(label));
   for (const forbidden of ['无需登录', '本地存储', '匿名统计', '自适应算法']) assert.doesNotMatch(html, new RegExp(forbidden));
   assert.match(html, /name="viewport"/);
+  assert.match(html, /输入好友配对码/);
+  assert.match(html, /开始双人匹配/);
   assert.match(css, /color:\s*var\(--ink\)/);
   assert.match(css, /prefers-reduced-motion/);
 });

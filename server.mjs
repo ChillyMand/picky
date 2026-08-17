@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { createArchiveRepository } from './src/archive.js';
 import { parseDevice } from './src/device.js';
 import { scoreTest } from './src/scoring.js';
+import { normalizePublicCode, isPublicCode } from './src/codes.js';
+import { scoreCompatibility } from './src/matching.js';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml' };
@@ -21,6 +23,7 @@ export function createAppServer({ archivePath = join(here, 'data/tests.json'), p
       const url = new URL(request.url, 'http://localhost');
       if (request.method === 'POST' && url.pathname === '/api/sessions') {
         const input = await body(request); const userAgent = String(request.headers['user-agent'] || '');
+        if (input.pairCode) { input.pairCode = normalizePublicCode(input.pairCode); if (!isPublicCode(input.pairCode) || !(await repo.getSessionByPublicCode(input.pairCode))) return json(response, 400, { error: '配对码不存在' }); }
         const session = await repo.createSession({ ...input, ip: clientIp(request), userAgent, device: parseDevice(userAgent) }); return json(response, 201, session);
       }
       let match = url.pathname.match(/^\/api\/sessions\/([^/]+)\/answers\/([^/]+)$/);
@@ -29,7 +32,11 @@ export function createAppServer({ archivePath = join(here, 'data/tests.json'), p
         await repo.upsertAnswer(match[1], { foodId: match[2], choice: input.choice, order: Number(input.order || 0), kind: input.kind || 'adaptive', durationMs: Number(input.durationMs || 0) }); response.writeHead(204); return response.end();
       }
       match = url.pathname.match(/^\/api\/sessions\/([^/]+)\/complete$/);
-      if (request.method === 'POST' && match) { const session = await repo.getSession(match[1]); if (!session) return json(response, 404, { error: '记录不存在' }); const result = scoreTest(session.answers); await repo.completeSession(match[1], result); return json(response, 200, { result }); }
+      if (request.method === 'POST' && match) { const session = await repo.getSession(match[1]); if (!session) return json(response, 404, { error: '记录不存在' }); const result = scoreTest(session.answers); await repo.completeSession(match[1], result); let pairMatch = null; if (session.pairCode) { const host = await repo.getSessionByPublicCode(session.pairCode); if (host?.status === 'completed') pairMatch = { hostCode: host.publicCode, guestCode: session.publicCode, ...scoreCompatibility(host.answers, session.answers) }; } return json(response, 200, { result, match: pairMatch }); }
+      match = url.pathname.match(/^\/api\/sessions\/([^/]+)\/public-code$/);
+      if (request.method === 'GET' && match) { const session = await repo.ensurePublicCode(match[1]); return json(response, 200, { publicCode: session.publicCode }); }
+      match = url.pathname.match(/^\/api\/pairs\/([^/]+)$/);
+      if (request.method === 'GET' && match) { const pair = await repo.getPairByHostCode(match[1]); if (!pair) return json(response, 404, { error: '配对码不存在' }); const report = pair.guest && pair.host.status === 'completed' ? { hostCode: pair.host.publicCode, guestCode: pair.guest.publicCode, ...scoreCompatibility(pair.host.answers, pair.guest.answers) } : null; return json(response, 200, report || { hostCode: pair.host.publicCode, waiting: true }); }
       if (request.method === 'GET' && url.pathname === '/api/admin/summary') return json(response, 200, await repo.summary());
       if (request.method === 'GET' && url.pathname === '/api/admin/sessions') return json(response, 200, await repo.listSessions({ status: url.searchParams.get('status') || undefined, personality: url.searchParams.get('personality') || undefined, query: url.searchParams.get('q') || '', page: Number(url.searchParams.get('page') || 1), pageSize: Math.min(100, Number(url.searchParams.get('pageSize') || 50)) }));
       match = url.pathname.match(/^\/api\/admin\/sessions\/([^/]+)$/);
