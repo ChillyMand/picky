@@ -29,6 +29,12 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(touchCss, /@media\s*\(hover:\s*none\)/);
   assert.match(touchCss, /\.answer-button:hover[^}]*background:\s*var\(--paper\)/);
   assert.match(appJs, /isPublicCode\(pendingPairCode\).*showIntro/s);
+  assert.match(appJs, /QRCode\.toCanvas/);
+  assert.match(appJs, /errorCorrectionLevel:\s*'H'/);
+  assert.match(appJs, /card\.pairUrl/);
+  assert.match(appJs, /context\.rotate\(2 \* Math\.PI \/ 180\)/);
+  assert.match(appJs, /drawImage\(qrCanvas,\s*0,\s*0,\s*260,\s*260\)/);
+  assert.match(appJs, /扫我测匹配度 ↗/);
   assert.doesNotMatch(appJs, /JSON\.parse\(localStorage\.getItem\(STORAGE_KEY\)\)/);
 });
 

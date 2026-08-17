@@ -4,12 +4,20 @@ export function buildShareText(result) {
   return `我的挑食指数是 ${result.pickyScore}%，属于“${result.personality.name}”。${result.verdict} 你是多少？`;
 }
 
-export function buildShareCardModel(result, sessionId) {
+export function buildPairInviteUrl(publicCode, origin = 'https://picky.wzrice.cn') {
+  const code = String(publicCode || '').trim().toUpperCase();
+  return `${String(origin).replace(/\/$/, '')}/?pair=${encodeURIComponent(code)}`;
+}
+
+export function buildShareCardModel(result, publicCode) {
+  const code = String(publicCode || 'LOCAL').trim().toUpperCase();
   return {
     width: 1080,
     height: 1440,
-    shortId: `#${String(sessionId || 'LOCAL').split('-')[0].slice(0, 8).toUpperCase()}`,
-    filename: `饭桌人格-${result.personality.name}-${String(sessionId || 'local').split('-')[0]}.jpg`,
+    shortId: `#${code}`,
+    publicCode: code,
+    pairUrl: buildPairInviteUrl(code),
+    filename: `饭桌人格-${result.personality.name}-${code}.jpg`,
     personality: result.personality.name,
     pickyScore: result.pickyScore,
     tags: result.tags,
