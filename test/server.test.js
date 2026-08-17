@@ -60,4 +60,8 @@ test('a second test can join the first public code and produce a compatibility r
   assert.ok(completed.match.score > 0);
   const publicMatch = await fetch(`${base}/api/pairs/${first.publicCode}`).then((response) => response.json());
   assert.equal(publicMatch.guestCode, second.publicCode);
+  const directMatch = await fetch(`${base}/api/matches?first=${first.publicCode}&second=${second.publicCode}`).then((response) => response.json());
+  assert.equal(directMatch.firstCode, first.publicCode);
+  assert.equal(directMatch.secondCode, second.publicCode);
+  assert.ok(directMatch.score > 0);
 });

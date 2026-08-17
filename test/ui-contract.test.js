@@ -18,6 +18,9 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(html, /name="viewport"/);
   assert.match(html, /输入好友配对码/);
   assert.match(html, /开始双人匹配/);
+  assert.match(html, /直接查看匹配度/);
+  assert.match(html, /我的测试码/);
+  assert.match(html, /对方测试码/);
   assert.match(css, /color:\s*var\(--ink\)/);
   assert.match(css, /prefers-reduced-motion/);
 });

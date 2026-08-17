@@ -37,6 +37,14 @@ export function createAppServer({ archivePath = join(here, 'data/tests.json'), p
       if (request.method === 'GET' && match) { const session = await repo.ensurePublicCode(match[1]); return json(response, 200, { publicCode: session.publicCode }); }
       match = url.pathname.match(/^\/api\/pairs\/([^/]+)$/);
       if (request.method === 'GET' && match) { const pair = await repo.getPairByHostCode(match[1]); if (!pair) return json(response, 404, { error: '配对码不存在' }); const report = pair.guest && pair.host.status === 'completed' ? { hostCode: pair.host.publicCode, guestCode: pair.guest.publicCode, ...scoreCompatibility(pair.host.answers, pair.guest.answers) } : null; return json(response, 200, report || { hostCode: pair.host.publicCode, waiting: true }); }
+      if (request.method === 'GET' && url.pathname === '/api/matches') {
+        const firstCode = normalizePublicCode(url.searchParams.get('first')); const secondCode = normalizePublicCode(url.searchParams.get('second'));
+        if (!isPublicCode(firstCode) || !isPublicCode(secondCode) || firstCode === secondCode) return json(response, 400, { error: '请输入两个不同的完整测试码' });
+        const first = await repo.getSessionByPublicCode(firstCode); const second = await repo.getSessionByPublicCode(secondCode);
+        if (!first || !second) return json(response, 404, { error: '没有找到对应的测试码' });
+        if (first.status !== 'completed' || second.status !== 'completed') return json(response, 409, { error: '其中一份测试尚未完成' });
+        return json(response, 200, { firstCode, secondCode, ...scoreCompatibility(first.answers, second.answers) });
+      }
       if (request.method === 'GET' && url.pathname === '/api/admin/summary') return json(response, 200, await repo.summary());
       if (request.method === 'GET' && url.pathname === '/api/admin/sessions') return json(response, 200, await repo.listSessions({ status: url.searchParams.get('status') || undefined, personality: url.searchParams.get('personality') || undefined, query: url.searchParams.get('q') || '', page: Number(url.searchParams.get('page') || 1), pageSize: Math.min(100, Number(url.searchParams.get('pageSize') || 50)) }));
       match = url.pathname.match(/^\/api\/admin\/sessions\/([^/]+)$/);
