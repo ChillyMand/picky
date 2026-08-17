@@ -12,6 +12,7 @@ test('user page exposes the complete test flow with visible answer copy and no i
   const base = `http://127.0.0.1:${app.address().port}`;
   const html = await fetch(base).then((response) => response.text());
   const css = await fetch(`${base}/styles.css`).then((response) => response.text());
+  const appJs = await fetch(`${base}/app.js`).then((response) => response.text());
   assert.match(html, /你到底有多挑食/);
   for (const label of ['超爱吃', '可以吃', '坚决不吃', '没吃过']) assert.match(html, new RegExp(label));
   for (const forbidden of ['无需登录', '本地存储', '匿名统计', '自适应算法']) assert.doesNotMatch(html, new RegExp(forbidden));
@@ -23,6 +24,7 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(html, /对方测试码/);
   assert.match(css, /color:\s*var\(--ink\)/);
   assert.match(css, /prefers-reduced-motion/);
+  assert.match(appJs, /isPublicCode\(pendingPairCode\).*showIntro/s);
 });
 
 test('client modules are served to the browser', async (t) => {
