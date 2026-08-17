@@ -1,6 +1,6 @@
 import { FOODS, getFoodById } from './foods.js';
 
-export const MAX_QUESTIONS = 30;
+export const MAX_QUESTIONS = 60;
 const INITIAL = ['pork', 'egg', 'fish', 'shrimp', 'bok_choy', 'eggplant', 'mushroom', 'tofu', 'coriander', 'pork_liver', 'chicken_feet', 'durian'];
 const CONFIRMATION = ['zheergen', 'pig_brain', 'fish_head', 'snail_noodle', 'oyster', 'bitter_melon'];
 
@@ -19,10 +19,27 @@ export function selectFollowUps(answers) {
   return result;
 }
 
+function stratifiedCatalog() {
+  const groups = new Map();
+  for (const item of FOODS) {
+    if (!groups.has(item.category)) groups.set(item.category, []);
+    groups.get(item.category).push(item.id);
+  }
+  const rows = [...groups.values()];
+  const ordered = [];
+  for (let index = 0; ordered.length < FOODS.length; index += 1) {
+    let added = false;
+    for (const row of rows) {
+      if (row[index]) { ordered.push(row[index]); added = true; }
+    }
+    if (!added) break;
+  }
+  return ordered;
+}
+
 export function buildQuestionQueue(answers = []) {
   const answered = new Set(answers.map(({ foodId }) => foodId));
-  const queue = [...INITIAL, ...selectFollowUps(answers), ...CONFIRMATION];
-  if (queue.length < 20) queue.push(...FOODS.map(({ id }) => id));
+  const queue = [...INITIAL, ...selectFollowUps(answers), ...CONFIRMATION, ...stratifiedCatalog()];
   return [...new Set(queue)].filter((id) => !answered.has(id) || INITIAL.includes(id)).slice(0, MAX_QUESTIONS);
 }
 

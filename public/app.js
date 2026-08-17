@@ -1,6 +1,6 @@
 import { getFoodById } from '/modules/foods.js';
-import { createInitialQueue, selectFollowUps } from '/modules/adaptive.js';
-import { buildShareText, buildShareSvg } from '/modules/share.js';
+import { createInitialQueue, selectFollowUps, buildQuestionQueue } from '/modules/adaptive.js';
+import { buildShareText, buildShareCardModel } from '/modules/share.js';
 
 const app = document.querySelector('#app');
 const CHOICES = [
@@ -9,7 +9,7 @@ const CHOICES = [
 const STORAGE_KEY = 'picky-test-progress-v1';
 const visitorId = localStorage.getItem('picky-visitor-id') || crypto.randomUUID();
 localStorage.setItem('picky-visitor-id', visitorId);
-let state = { sessionId: null, answers: [], queue: createInitialQueue(), index: 0, result: null };
+let state = { sessionId: null, answers: [], queue: buildQuestionQueue([]), index: 0, result: null };
 let pendingWrites = [];
 let questionStartedAt = Date.now();
 
@@ -26,7 +26,7 @@ function showIntro() {
 async function createSession() {
   const response = await fetch('/api/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ visitorId, viewport: { width: innerWidth, height: innerHeight, pixelRatio: devicePixelRatio }, language: navigator.language, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, referrer: document.referrer }) });
   if (!response.ok) throw new Error('暂时无法开始');
-  const session = await response.json(); state = { sessionId: session.id, answers: [], queue: createInitialQueue(), index: 0, result: null }; save(); showQuestion();
+  const session = await response.json(); state = { sessionId: session.id, answers: [], queue: buildQuestionQueue([]), index: 0, result: null }; save(); showQuestion();
 }
 
 function questionCopy(food) {
@@ -39,7 +39,7 @@ function kindFor(id) { return createInitialQueue().includes(id) ? 'initial' : ['
 
 function showQuestion() {
   const id = state.queue[state.index]; const food = getFoodById(id); if (!food) return finish();
-  questionStartedAt = Date.now(); const progress = Math.min(96, Math.round((state.answers.length / 24) * 100));
+  questionStartedAt = Date.now(); const progress = Math.min(96, Math.round((state.answers.length / 54) * 100));
   screen(`<div class="progress-row"><span class="zone-label">${escapeHtml(food.category)}</span><span>已完成 ${state.answers.length} 题</span></div><div class="progress"><span style="width:${progress}%"></span></div><div class="food-card"><span class="emoji" aria-hidden="true">${food.emoji}</span>${food.challenge >= 3 ? '<span class="challenge">经典难题</span>' : ''}</div><h1 class="question-title">${escapeHtml(questionCopy(food))}</h1><div class="answers">${CHOICES.map(([choice, emoji, label]) => `<button class="answer-button" data-choice="${choice}"><span aria-hidden="true">${emoji}</span> ${label}</button>`).join('')}</div>${state.index ? '<button class="secondary-button back-button" data-action="back">← 上一题</button>' : ''}`, 'question-screen');
 }
 
@@ -51,11 +51,11 @@ function archiveAnswer(answer) {
 function answer(choice) {
   const foodId = state.queue[state.index]; const item = { foodId, choice, order: state.index + 1, kind: kindFor(foodId), durationMs: Date.now() - questionStartedAt };
   state.answers = state.answers.filter((answerItem) => answerItem.foodId !== foodId); state.answers.push(item); archiveAnswer(item);
-  const extras = selectFollowUps(state.answers); const confirmation = ['zheergen', 'pig_brain', 'fish_head', 'snail_noodle', 'oyster', 'bitter_melon'];
-  const candidates = [...state.queue, ...extras, ...confirmation]; state.queue = [...new Set(candidates)];
+  const extras = selectFollowUps(state.answers).filter((id) => !state.queue.includes(id));
+  if (extras.length) state.queue.splice(state.index + 1, 0, ...extras);
   state.index += 1; save();
-  if (state.answers.length >= 24 || state.index >= state.queue.length) return finish();
-  if ([8, 16].includes(state.answers.length)) return showFeedback();
+  if (state.answers.length >= 54 || state.index >= state.queue.length) return finish();
+  if ([12, 30, 45].includes(state.answers.length)) return showFeedback();
   showQuestion();
 }
 
@@ -77,7 +77,28 @@ function showResult() {
 }
 
 async function shareResult() { const text = buildShareText(state.result); if (navigator.share) { try { await navigator.share({ title: '我的饭桌人格', text, url: location.origin }); return; } catch {} } await navigator.clipboard.writeText(`${text} ${location.origin}`); showToast('分享文案已复制'); }
-function downloadCard() { const r = state.result; const svg = buildShareSvg(r); const link = document.createElement('a'); link.href = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`; link.download = `饭桌人格-${r.personality.name}.svg`; link.click(); }
+function downloadCard() {
+  const card = buildShareCardModel(state.result, state.sessionId);
+  const canvas = document.createElement('canvas'); canvas.width = card.width; canvas.height = card.height;
+  const context = canvas.getContext('2d'); context.fillStyle = '#322c27'; context.fillRect(0, 0, card.width, card.height);
+  context.fillStyle = '#dfff70'; context.beginPath(); context.arc(940, 70, 230, 0, Math.PI * 2); context.fill();
+  context.textAlign = 'center'; context.fillStyle = '#ffb4c9'; context.font = '700 34px sans-serif'; context.fillText('MY TABLE PERSONALITY', 540, 150);
+  context.fillStyle = '#ffffff'; context.font = '900 82px sans-serif'; context.fillText(card.personality, 540, 410);
+  context.fillStyle = '#ffb4c9'; context.font = '900 220px sans-serif'; context.fillText(String(card.pickyScore), 540, 690);
+  context.fillStyle = '#ffffff'; context.font = '32px sans-serif'; context.fillText('挑食指数', 540, 760);
+  context.fillStyle = '#dfff70'; context.font = '700 34px sans-serif'; context.fillText(card.tags.join(' · '), 540, 930);
+  context.fillStyle = '#ffffff'; context.font = '40px sans-serif';
+  const words = [...card.verdict]; const lines = []; let line = '';
+  for (const word of words) { const next = line + word; if (context.measureText(next).width > 800) { lines.push(line); line = word; } else line = next; }
+  if (line) lines.push(line); lines.slice(0, 3).forEach((text, index) => context.fillText(text, 540, 1060 + index * 60));
+  context.font = '700 30px sans-serif'; context.fillText('你和我能吃到一桌吗？', 540, 1320);
+  context.textAlign = 'right'; context.fillStyle = '#8f8983'; context.font = '24px ui-monospace, monospace'; context.fillText(card.shortId, 1010, 1385);
+  canvas.toBlob((blob) => {
+    if (!blob) { showToast('人格卡生成失败，请重试'); return; }
+    const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = card.filename; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, 'image/jpeg', .92);
+}
 
 app.addEventListener('click', async (event) => {
   const choiceButton = event.target.closest('[data-choice]'); if (choiceButton) return answer(choiceButton.dataset.choice);
