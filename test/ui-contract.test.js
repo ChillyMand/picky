@@ -44,6 +44,9 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(appJs, /canvas\.toDataURL\('image\/jpeg',\s*\.92\)/);
   assert.match(appJs, /长按图片保存到相册/);
   assert.match(appJs, /MicroMessenger/i);
+  assert.match(appJs, /pickShareTheme\(\)/);
+  assert.match(appJs, /快来测测我们的饭桌默契度/);
+  assert.doesNotMatch(appJs, /navigator\.share/);
   assert.match(previewCss, /\.share-preview-overlay/);
   assert.match(compactCss, /max-height:\s*760px/);
   assert.match(compactCss, /\.intro-screen \.rules\s*\{[^}]*grid-template-columns:\s*1fr 1fr/);

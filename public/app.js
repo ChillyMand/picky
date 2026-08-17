@@ -1,9 +1,10 @@
 import { getFoodById } from '/modules/foods.js';
 import { createInitialQueue, selectFollowUps, buildQuestionQueue } from '/modules/adaptive.js';
 import QRCode from 'qrcode';
-import { buildShareText, buildShareCardModel, buildPairInviteUrl } from '/modules/share.js';
+import { buildShareCardModel, buildPairInviteUrl } from '/modules/share.js';
+import { pickShareTheme } from '/modules/share-themes.js';
 import { normalizePublicCode, isPublicCode } from '/modules/codes.js';
-import { createVisitorId, clearProgress } from '/modules/browser-compat.js';
+import { createVisitorId, clearProgress, copyText } from '/modules/browser-compat.js';
 
 const app = document.querySelector('#app');
 const CHOICES = [
@@ -82,13 +83,13 @@ function showResult() {
 }
 
 function pairUrl() { return buildPairInviteUrl(state.publicCode, location.origin); }
-async function copyPair() { await navigator.clipboard.writeText(`${state.publicCode}\n${pairUrl()}`); showToast('配对码和邀请链接已复制'); }
+async function copyPair() { const copied = await copyText(`${state.publicCode}\n${pairUrl()}`); showToast(copied ? '配对码和邀请链接已复制' : '复制失败，请长按配对码复制'); }
 async function checkPair() { const response = await fetch(`/api/pairs/${state.publicCode}`); if (!response.ok) return showToast('暂时无法查询'); const report = await response.json(); if (report.waiting) return showToast('好友完成测试后即可查看'); state.match = report; save(); showResult(); }
 async function joinPair() { const input = document.querySelector('#pair-code-input'); const code = normalizePublicCode(input?.value); if (!isPublicCode(code)) return showToast('请输入完整的 5 位配对码'); const response = await fetch(`/api/pairs/${code}`); if (!response.ok) return showToast('没有找到这个配对码'); pendingPairCode = code; history.replaceState(null, '', `/?pair=${code}`); showIntro(); }
 function showDirectMatch(match) { screen(`<div class="feedback-sticker">🍻</div><p class="eyebrow">${escapeHtml(match.firstCode)} × ${escapeHtml(match.secondCode)}</p><h1>你们的饭桌匹配度</h1><div class="result-card pair-report"><div class="pair-score">${match.score}%</div><p class="verdict">${escapeHtml(match.verdict)}</p><p>共同回答 ${match.overlapCount} 道题</p><div class="pair-lists"><div><h3>😋 都爱吃</h3><p>${match.sharedLikes.map((food) => escapeHtml(food.name)).join('、') || '暂时没有'}</p></div><div><h3>🤝 一起避开</h3><p>${match.sharedAvoids.map((food) => escapeHtml(food.name)).join('、') || '暂时没有'}</p></div><div><h3>⚡ 饭桌分歧</h3><p>${match.conflicts.map((food) => escapeHtml(food.name)).join('、') || '几乎没有'}</p></div></div></div><button class="secondary-button" data-action="home">返回首页</button>`, 'result-screen'); }
 async function lookupMatch() { const first = normalizePublicCode(document.querySelector('#first-match-code')?.value); const second = normalizePublicCode(document.querySelector('#second-match-code')?.value); if (!isPublicCode(first) || !isPublicCode(second) || first === second) return showToast('请输入两个不同的 5 位测试码'); const response = await fetch(`/api/matches?first=${first}&second=${second}`); const payload = await response.json(); if (!response.ok) return showToast(payload.error || '暂时无法查询'); showDirectMatch(payload); }
 async function lookupResultMatch() { const second = normalizePublicCode(document.querySelector('#result-friend-code')?.value); if (!isPublicCode(state.publicCode) || !isPublicCode(second) || state.publicCode === second) return showToast('请输入对方完整的 5 位测试码'); const response = await fetch(`/api/matches?first=${state.publicCode}&second=${second}`); const payload = await response.json(); if (!response.ok) return showToast(payload.error || '暂时无法查询'); state.match = { hostCode: payload.firstCode, guestCode: payload.secondCode, ...payload }; save(); showResult(); }
-async function shareResult() { const text = `${buildShareText(state.result)} 配对码：${state.publicCode}`; if (navigator.share) { try { await navigator.share({ title: '我的饭桌人格', text, url: pairUrl() }); return; } catch {} } await navigator.clipboard.writeText(`${text} ${pairUrl()}`); showToast('分享文案和配对链接已复制'); }
+async function shareResult() { const copied = await copyText(`快来测测我们的饭桌默契度！我的配对码是 ${state.publicCode}：${pairUrl()}`); showToast(copied ? '邀请文案和链接已复制' : '复制失败，请长按配对码复制'); }
 function showImagePreview(imageUrl, filename) {
   document.querySelector('.share-preview-overlay')?.remove();
   const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
@@ -105,32 +106,33 @@ function showImagePreview(imageUrl, filename) {
 async function downloadCard() {
   if (!isPublicCode(state.publicCode)) return showToast('测试码生成中，请稍后重试');
   const card = buildShareCardModel(state.result, state.publicCode);
+  const theme = pickShareTheme();
   const qrCanvas = document.createElement('canvas');
   try {
     await QRCode.toCanvas(qrCanvas, card.pairUrl, {
       errorCorrectionLevel: 'H', margin: 4, width: 260,
-      color: { dark: '#322c27', light: '#ffffff' },
+      color: { dark: theme.qrDark, light: '#ffffff' },
     });
   } catch { return showToast('人格卡生成失败，请重试'); }
   const canvas = document.createElement('canvas'); canvas.width = card.width; canvas.height = card.height;
-  const context = canvas.getContext('2d'); context.fillStyle = '#322c27'; context.fillRect(0, 0, card.width, card.height);
-  context.fillStyle = '#dfff70'; context.beginPath(); context.arc(940, 70, 230, 0, Math.PI * 2); context.fill();
-  context.textAlign = 'center'; context.fillStyle = '#ffb4c9'; context.font = '700 34px sans-serif'; context.fillText('MY TABLE PERSONALITY', 540, 130);
-  context.fillStyle = '#ffffff'; context.font = '900 82px sans-serif'; context.fillText(card.personality, 540, 330);
-  context.fillStyle = '#ffb4c9'; context.font = '900 210px sans-serif'; context.fillText(String(card.pickyScore), 540, 570);
-  context.fillStyle = '#ffffff'; context.font = '32px sans-serif'; context.fillText('挑食指数', 540, 645);
-  context.fillStyle = '#dfff70'; context.font = '700 34px sans-serif'; context.fillText(card.tags.join(' · '), 540, 760);
-  context.fillStyle = '#ffffff'; context.font = '38px sans-serif';
+  const context = canvas.getContext('2d'); context.fillStyle = theme.background; context.fillRect(0, 0, card.width, card.height);
+  context.fillStyle = theme.accent; context.beginPath(); context.arc(940, 70, 230, 0, Math.PI * 2); context.fill();
+  context.textAlign = 'center'; context.fillStyle = theme.primary; context.font = '700 34px sans-serif'; context.fillText('MY TABLE PERSONALITY', 540, 130);
+  context.fillStyle = theme.foreground; context.font = '900 82px sans-serif'; context.fillText(card.personality, 540, 330);
+  context.fillStyle = theme.primary; context.font = '900 210px sans-serif'; context.fillText(String(card.pickyScore), 540, 570);
+  context.fillStyle = theme.foreground; context.font = '32px sans-serif'; context.fillText('挑食指数', 540, 645);
+  context.fillStyle = theme.accent; context.font = '700 34px sans-serif'; context.fillText(card.tags.join(' · '), 540, 760);
+  context.fillStyle = theme.foreground; context.font = '38px sans-serif';
   const words = [...card.verdict]; const lines = []; let line = '';
   for (const word of words) { const next = line + word; if (context.measureText(next).width > 800) { lines.push(line); line = word; } else line = next; }
   if (line) lines.push(line); lines.slice(0, 2).forEach((text, index) => context.fillText(text, 540, 850 + index * 56));
   context.save();
   context.translate(540, 1160);
   context.rotate(2 * Math.PI / 180);
-  context.fillStyle = '#ffb4c9'; context.fillRect(-151, -186, 330, 400);
+  context.fillStyle = theme.stickerShadow; context.fillRect(-151, -186, 330, 400);
   context.fillStyle = '#ffffff'; context.fillRect(-165, -200, 330, 400);
   context.save(); context.translate(-130, -170); context.drawImage(qrCanvas, 0, 0, 260, 260); context.restore();
-  context.fillStyle = '#322c27'; context.font = '900 43px ui-monospace, monospace'; context.fillText(card.publicCode, 0, 132);
+  context.fillStyle = theme.qrDark; context.font = '900 43px ui-monospace, monospace'; context.fillText(card.publicCode, 0, 132);
   context.font = '700 20px sans-serif'; context.fillText('扫我测匹配度 ↗', 0, 170);
   context.restore();
   try { showImagePreview(canvas.toDataURL('image/jpeg', .92), card.filename); }
