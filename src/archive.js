@@ -1,0 +1,59 @@
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
+
+export function createArchiveRepository(filePath) {
+  let writeQueue = Promise.resolve();
+  async function load() {
+    try { return JSON.parse(await readFile(filePath, 'utf8')); }
+    catch (error) { if (error.code === 'ENOENT') return { sessions: [] }; throw error; }
+  }
+  async function save(data) {
+    await mkdir(dirname(filePath), { recursive: true });
+    const temporary = `${filePath}.${process.pid}.tmp`;
+    await writeFile(temporary, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+    await rename(temporary, filePath);
+  }
+  function mutate(fn) {
+    const operation = writeQueue.then(async () => { const data = await load(); const result = await fn(data); await save(data); return structuredClone(result); });
+    writeQueue = operation.catch(() => {});
+    return operation;
+  }
+  return {
+    async createSession(input) {
+      return mutate((data) => {
+        const now = new Date().toISOString();
+        const session = { id: randomUUID(), visitorId: input.visitorId || randomUUID(), userId: null, ip: input.ip || '', userAgent: input.userAgent || '', device: input.device || {}, viewport: input.viewport || {}, language: input.language || '', timezone: input.timezone || '', referrer: input.referrer || '', status: 'in_progress', startedAt: now, updatedAt: now, completedAt: null, answers: [], result: null };
+        data.sessions.unshift(session); return session;
+      });
+    },
+    async upsertAnswer(sessionId, answer) {
+      return mutate((data) => {
+        const session = data.sessions.find(({ id }) => id === sessionId); if (!session) throw Object.assign(new Error('Session not found'), { statusCode: 404 });
+        const existing = session.answers.find(({ foodId }) => foodId === answer.foodId);
+        const now = new Date().toISOString();
+        if (existing) Object.assign(existing, answer, { modifiedCount: (existing.modifiedCount || 0) + (existing.choice === answer.choice ? 0 : 1), updatedAt: now });
+        else session.answers.push({ ...answer, modifiedCount: 0, answeredAt: now, updatedAt: now });
+        session.updatedAt = now; return session;
+      });
+    },
+    async completeSession(sessionId, result) {
+      return mutate((data) => { const session = data.sessions.find(({ id }) => id === sessionId); if (!session) throw Object.assign(new Error('Session not found'), { statusCode: 404 }); const now = new Date().toISOString(); Object.assign(session, { status: 'completed', result, completedAt: now, updatedAt: now }); return session; });
+    },
+    async getSession(sessionId) { await writeQueue; const data = await load(); return structuredClone(data.sessions.find(({ id }) => id === sessionId) || null); },
+    async listSessions({ status, personality, query = '', page = 1, pageSize = 50 } = {}) {
+      await writeQueue; const data = await load(); let items = data.sessions;
+      if (status) items = items.filter((item) => item.status === status);
+      if (personality) items = items.filter((item) => item.result?.personality?.id === personality);
+      if (query) { const needle = query.toLowerCase(); items = items.filter((item) => [item.id, item.visitorId, item.userId, item.ip].some((value) => String(value || '').toLowerCase().includes(needle))); }
+      const total = items.length; const start = (Math.max(1, page) - 1) * pageSize; return { items: structuredClone(items.slice(start, start + pageSize)), total, page, pageSize };
+    },
+    async summary() {
+      await writeQueue; const { sessions } = await load(); const completed = sessions.filter((item) => item.status === 'completed');
+      const answerCounts = { love: 0, okay: 0, refuse: 0, unknown: 0 }; sessions.flatMap((item) => item.answers).forEach(({ choice }) => { if (choice in answerCounts) answerCounts[choice]++; });
+      const personalityCounts = {}; completed.forEach(({ result }) => { const name = result?.personality?.name || '未知'; personalityCounts[name] = (personalityCounts[name] || 0) + 1; });
+      const completedDurations = completed.map((item) => new Date(item.completedAt) - new Date(item.startedAt)).filter((value) => value >= 0);
+      return { started: sessions.length, completed: completed.length, completionRate: sessions.length ? completed.length / sessions.length : 0, averageQuestions: completed.length ? completed.reduce((sum, item) => sum + item.answers.length, 0) / completed.length : 0, averageDurationMs: completedDurations.length ? completedDurations.reduce((a, b) => a + b, 0) / completedDurations.length : 0, answerCounts, personalityCounts };
+    },
+  };
+}
