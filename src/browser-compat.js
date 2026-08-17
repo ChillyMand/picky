@@ -4,3 +4,5 @@ export function createVisitorId(storage, cryptoApi = globalThis.crypto, now = Da
   try { storage?.setItem('picky-visitor-id', id); } catch {}
   return id;
 }
+
+export function clearProgress(storage, key) { try { storage?.removeItem(key); } catch {} }

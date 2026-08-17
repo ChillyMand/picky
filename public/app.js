@@ -2,7 +2,7 @@ import { getFoodById } from '/modules/foods.js';
 import { createInitialQueue, selectFollowUps, buildQuestionQueue } from '/modules/adaptive.js';
 import { buildShareText, buildShareCardModel } from '/modules/share.js';
 import { normalizePublicCode, isPublicCode } from '/modules/codes.js';
-import { createVisitorId } from '/modules/browser-compat.js';
+import { createVisitorId, clearProgress } from '/modules/browser-compat.js';
 
 const app = document.querySelector('#app');
 const CHOICES = [
@@ -16,7 +16,7 @@ let pendingWrites = [];
 let questionStartedAt = Date.now();
 
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-function clear() { localStorage.removeItem(STORAGE_KEY); }
+function clear() { clearProgress(globalThis.localStorage, STORAGE_KEY); }
 function escapeHtml(value = '') { return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]); }
 function screen(content, className = '') { app.innerHTML = `<section class="screen ${className}">${content}</section>`; window.scrollTo({ top: 0, behavior: 'smooth' }); }
 function showToast(message) { const node = document.createElement('div'); node.className = 'toast'; node.textContent = message; document.body.append(node); setTimeout(() => node.remove(), 1800); }
@@ -118,6 +118,6 @@ app.addEventListener('click', async (event) => {
   if (action === 'show-intro') showIntro(); else if (action === 'join-pair') joinPair(); else if (action === 'lookup-match') lookupMatch(); else if (action === 'lookup-result-match') lookupResultMatch(); else if (action === 'home') location.href = '/'; else if (action === 'start') { try { await createSession(); } catch { showToast('暂时无法开始，请重试'); } } else if (action === 'continue') showQuestion(); else if (action === 'back') { state.index = Math.max(0, state.index - 1); showQuestion(); } else if (action === 'finish') finish(); else if (action === 'share') shareResult(); else if (action === 'copy-pair') copyPair(); else if (action === 'check-pair') checkPair(); else if (action === 'download') downloadCard(); else if (action === 'restart') { clear(); pendingPairCode = ''; history.replaceState(null, '', '/'); showIntro(); }
 });
 
-if (isPublicCode(pendingPairCode)) { clear(); showIntro(); }
-else try { const restored = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (restored?.sessionId && restored.result) { state = restored; if (!state.publicCode) { fetch(`/api/sessions/${state.sessionId}/public-code`).then((response) => response.json()).then(({ publicCode }) => { state.publicCode = publicCode; save(); showResult(); }); } showResult(); } else if (restored?.sessionId && restored.queue?.length) { state = restored; showQuestion(); } } catch { clear(); }
+clear();
+if (isPublicCode(pendingPairCode)) showIntro();
 const pairInput = document.querySelector('#pair-code-input'); if (pairInput && pendingPairCode) pairInput.value = pendingPairCode;

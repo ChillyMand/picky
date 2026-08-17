@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createVisitorId } from '../src/browser-compat.js';
+import { createVisitorId, clearProgress } from '../src/browser-compat.js';
 
 test('visitor id works when WeChat webview has no crypto.randomUUID', () => {
   const saved = new Map();
@@ -13,4 +13,9 @@ test('visitor id works when WeChat webview has no crypto.randomUUID', () => {
 test('visitor id still works when WeChat privacy mode blocks storage', () => {
   const storage = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
   assert.doesNotThrow(() => createVisitorId(storage, {}, () => 1723910400000, () => 0.5));
+});
+
+test('opening the site can clear progress even when storage is blocked', () => {
+  const storage = { removeItem() { throw new Error('blocked'); } };
+  assert.doesNotThrow(() => clearProgress(storage, 'progress'));
 });

@@ -29,6 +29,7 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(touchCss, /@media\s*\(hover:\s*none\)/);
   assert.match(touchCss, /\.answer-button:hover[^}]*background:\s*var\(--paper\)/);
   assert.match(appJs, /isPublicCode\(pendingPairCode\).*showIntro/s);
+  assert.doesNotMatch(appJs, /JSON\.parse\(localStorage\.getItem\(STORAGE_KEY\)\)/);
 });
 
 test('client modules are served to the browser', async (t) => {
