@@ -16,15 +16,18 @@ let state = { sessionId: null, publicCode: null, pairCode: null, match: null, an
 let pendingPairCode = normalizePublicCode(new URLSearchParams(location.search).get('pair'));
 let pendingWrites = [];
 let questionStartedAt = Date.now();
+let brandLogoPromise;
 
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 function clear() { clearProgress(globalThis.localStorage, STORAGE_KEY); }
 function escapeHtml(value = '') { return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]); }
 function screen(content, className = '') { app.innerHTML = `<section class="screen ${className}">${content}</section>`; window.scrollTo({ top: 0, behavior: 'smooth' }); }
 function showToast(message) { const node = document.createElement('div'); node.className = 'toast'; node.textContent = message; document.body.append(node); setTimeout(() => node.remove(), 1800); }
+function brandLockup() { return '<div class="brand-lockup brand-lockup-hero"><img src="/assets/picky-logo.png" alt=""><span class="brand-word">PICKY<span class="brand-bang">!</span></span></div>'; }
+function loadBrandLogo() { if (!brandLogoPromise) brandLogoPromise = new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = reject; image.src = '/assets/picky-logo.png'; }); return brandLogoPromise; }
 
 function showIntro() {
-  screen(`${pendingPairCode ? `<div class="pair-banner">正在加入配对 <strong>${escapeHtml(pendingPairCode)}</strong>，完成测试即可查看你们的匹配度。</div>` : ''}<div class="rice-character">🍙</div><h1>先对一下暗号</h1><p class="intro-copy">不考虑具体做法，只回答你平时愿不愿意吃。</p><div class="rules">${CHOICES.map(([, emoji, label], index) => `<div class="rule"><strong>${emoji} ${label}</strong><small>${['看到会主动夹', '有就吃，没有也行', '会挑出来或直接拒绝', '暂时无法判断'][index]}</small></div>`).join('')}</div><div class="friendly-note">没有正确答案，挑食也不扣饭票。</div><button class="primary-button" data-action="start">${pendingPairCode ? '开始配对测试' : '我准备好了'} →</button><button class="secondary-button" data-action="home">返回首页</button>`, 'intro-screen');
+  screen(`${pendingPairCode ? `<div class="pair-banner">正在加入配对 <strong>${escapeHtml(pendingPairCode)}</strong>，完成测试即可查看你们的匹配度。</div>` : ''}${brandLockup()}<h1>先对一下暗号</h1><p class="intro-copy">不考虑具体做法，只回答你平时愿不愿意吃。</p><div class="rules">${CHOICES.map(([, emoji, label], index) => `<div class="rule"><strong>${emoji} ${label}</strong><small>${['看到会主动夹', '有就吃，没有也行', '会挑出来或直接拒绝', '暂时无法判断'][index]}</small></div>`).join('')}</div><div class="friendly-note">没有正确答案，挑食也不扣饭票。</div><button class="primary-button" data-action="start">${pendingPairCode ? '开始配对测试' : '我准备好了'} →</button><button class="secondary-button" data-action="home">返回首页</button>`, 'intro-screen');
 }
 
 async function createSession() {
@@ -69,9 +72,9 @@ function showFeedback() {
 }
 
 async function finish() {
-  screen(`<div class="feedback-sticker">🍚</div><h1>正在检查你的饭碗</h1><p>定位口感雷区·分析饭桌人格</p><div class="loading-dots"><i></i><i></i><i></i></div>`, 'loading-screen');
+  screen(`${brandLockup()}<h1>正在检查你的饭碗</h1><p>定位口感雷区·分析饭桌人格</p><div class="loading-dots"><i></i><i></i><i></i></div>`, 'loading-screen');
   try { await Promise.allSettled(pendingWrites); const response = await fetch(`/api/sessions/${state.sessionId}/complete`, { method: 'POST' }); if (!response.ok) throw new Error(); const completed = await response.json(); state.result = completed.result; state.match = completed.match; save(); setTimeout(showResult, 650); }
-  catch { screen(`<div class="feedback-sticker">🍚</div><h1>饭碗检查暂停了一下</h1><p>你的选择还在，重试即可。</p><button class="primary-button" data-action="finish">重新生成结果</button>`, 'feedback-screen'); }
+  catch { screen(`${brandLockup()}<h1>饭碗检查暂停了一下</h1><p>你的选择还在，重试即可。</p><button class="primary-button" data-action="finish">重新生成结果</button>`, 'feedback-screen'); }
 }
 
 const dimensionLabels = { variety: '食材接受', odor: '气味耐受', texture: '口感包容', appearance: '外观接受', seafood: '水产友好', exploration: '探索意愿' };
@@ -79,7 +82,7 @@ function showResult() {
   const result = state.result; if (!result) return finish();
   const match = state.match;
   const pairSection = match ? `<div class="result-card pair-report"><h2>你们的饭桌匹配度</h2><div class="pair-score">${match.score}%</div><p class="verdict">${escapeHtml(match.verdict)}</p><p>共同回答 ${match.overlapCount} 道题</p><div class="pair-lists"><div><h3>😋 都爱吃</h3><p>${match.sharedLikes.map((food) => escapeHtml(food.name)).join('、') || '暂时没有'}</p></div><div><h3>🤝 一起避开</h3><p>${match.sharedAvoids.map((food) => escapeHtml(food.name)).join('、') || '暂时没有'}</p></div><div><h3>⚡ 饭桌分歧</h3><p>${match.conflicts.map((food) => escapeHtml(food.name)).join('、') || '几乎没有'}</p></div></div></div>` : `<div class="pair-code-card"><small>你的测试 ID · 好友配对码</small><strong>${escapeHtml(state.publicCode || '-----')}</strong><p>把测试码发给好友；双方都测完后，输入对方的测试码即可直接查看。</p><input id="result-friend-code" maxlength="5" autocomplete="off" placeholder="输入对方测试码" aria-label="输入对方测试码"><div class="pair-actions"><button data-action="copy-pair">复制配对码</button><button data-action="lookup-result-match">查看匹配度</button></div></div>`;
-  screen(`<div class="result-hero"><span class="result-label">你的饭桌人格是</span><h1>${escapeHtml(result.personality.name)}</h1><div class="score-orb"><div><strong>${result.pickyScore}</strong><small>挑食指数</small></div></div><div class="tags">${result.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}</div></div>${pairSection}<div class="result-card"><p class="verdict">${escapeHtml(result.verdict)}</p>${result.easterEgg ? `<p class="easter">🎉 ${escapeHtml(result.easterEgg)}</p>` : ''}<p class="lead" style="text-align:left">挑食指数反映你的饮食边界，不代表饮食健康程度。</p></div><div class="result-card"><h2>你的饭碗边界</h2><div class="dimensions">${Object.entries(result.dimensions).map(([key, value]) => `<div class="dimension-row"><span>${dimensionLabels[key]}</span><span class="dimension-track"><i style="width:${value}%"></i></span><b>${value}</b></div>`).join('')}</div></div><div class="share-card" id="share-card"><small>MY TABLE PERSONALITY</small><h2>${escapeHtml(result.personality.name)}</h2><div class="share-score">${result.pickyScore}</div><p>${result.tags.map(escapeHtml).join(' · ')}</p><p>${escapeHtml(result.verdict)}</p><b>配对码 ${escapeHtml(state.publicCode || '-----')}</b></div><div class="share-actions"><button data-action="share">分享链接</button><button data-action="download">保存图片</button></div><button class="secondary-button" data-action="restart">重新测一次</button>`, 'result-screen');
+  screen(`<div class="result-hero"><span class="result-label">你的饭桌人格是</span><h1>${escapeHtml(result.personality.name)}</h1><div class="score-orb"><div><strong>${result.pickyScore}</strong><small>挑食指数</small></div></div><div class="tags">${result.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}</div></div>${pairSection}<div class="result-card"><p class="verdict">${escapeHtml(result.verdict)}</p>${result.easterEgg ? `<p class="easter">🎉 ${escapeHtml(result.easterEgg)}</p>` : ''}<p class="lead" style="text-align:left">挑食指数反映你的饮食边界，不代表饮食健康程度。</p></div><div class="result-card"><h2>你的饭碗边界</h2><div class="dimensions">${Object.entries(result.dimensions).map(([key, value]) => `<div class="dimension-row"><span>${dimensionLabels[key]}</span><span class="dimension-track"><i style="width:${value}%"></i></span><b>${value}</b></div>`).join('')}</div></div><div class="share-card" id="share-card"><div class="brand-lockup share-card-brand"><img src="/assets/picky-logo.png" alt=""><span class="brand-word">PICKY<span class="brand-bang">!</span></span></div><h2>${escapeHtml(result.personality.name)}</h2><div class="share-score">${result.pickyScore}</div><p>${result.tags.map(escapeHtml).join(' · ')}</p><p>${escapeHtml(result.verdict)}</p><b>配对码 ${escapeHtml(state.publicCode || '-----')}</b></div><div class="share-actions"><button data-action="share">分享链接</button><button data-action="download">保存图片</button></div><button class="secondary-button" data-action="restart">重新测一次</button>`, 'result-screen');
 }
 
 function pairUrl() { return buildPairInviteUrl(state.publicCode, location.origin); }
@@ -107,6 +110,9 @@ async function downloadCard() {
   if (!isPublicCode(state.publicCode)) return showToast('测试码生成中，请稍后重试');
   const card = buildShareCardModel(state.result, state.publicCode);
   const theme = pickShareTheme();
+  let brandLogo;
+  try { brandLogo = await loadBrandLogo(); }
+  catch { return showToast('品牌图片加载失败，请重试'); }
   const qrCanvas = document.createElement('canvas');
   try {
     await QRCode.toCanvas(qrCanvas, card.pairUrl, {
@@ -117,7 +123,10 @@ async function downloadCard() {
   const canvas = document.createElement('canvas'); canvas.width = card.width; canvas.height = card.height;
   const context = canvas.getContext('2d'); context.fillStyle = theme.background; context.fillRect(0, 0, card.width, card.height);
   context.fillStyle = theme.accent; context.beginPath(); context.arc(940, 70, 230, 0, Math.PI * 2); context.fill();
-  context.textAlign = 'center'; context.fillStyle = theme.primary; context.font = '700 34px sans-serif'; context.fillText('MY TABLE PERSONALITY', 540, 130);
+  context.drawImage(brandLogo, 68, 46, 92, 92);
+  context.textAlign = 'left'; context.fillStyle = theme.foreground; context.font = '900 46px sans-serif'; context.fillText('PICKY', 176, 108);
+  context.fillStyle = theme.primary; context.fillText('!', 310, 108);
+  context.textAlign = 'center';
   context.fillStyle = theme.foreground; context.font = '900 82px sans-serif'; context.fillText(card.personality, 540, 330);
   context.fillStyle = theme.primary; context.font = '900 210px sans-serif'; context.fillText(String(card.pickyScore), 540, 570);
   context.fillStyle = theme.foreground; context.font = '32px sans-serif'; context.fillText('挑食指数', 540, 645);

@@ -25,6 +25,10 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(html, /touch-fixes\.css\?v=2/);
   assert.match(html, /intro-compact\.css\?v=1/);
   assert.match(html, /share-preview\.css\?v=1/);
+  assert.match(html, /brand\.css\?v=2/);
+  assert.match(html, /app\.js\?v=brand1/);
+  assert.match(html, /\/assets\/picky-logo\.png/);
+  assert.match(html, /COPYRIGHT © 2026 WZRICE\.CN · ALL RIGHTS RESERVED/);
   assert.match(html, /直接查看匹配度/);
   assert.match(html, /我的测试码/);
   assert.match(html, /对方测试码/);
@@ -45,6 +49,10 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(appJs, /长按图片保存到相册/);
   assert.match(appJs, /MicroMessenger/i);
   assert.match(appJs, /pickShareTheme\(\)/);
+  assert.match(appJs, /brand-lockup/);
+  assert.match(appJs, /context\.drawImage\(brandLogo/);
+  assert.doesNotMatch(appJs, /MY TABLE PERSONALITY/);
+  assert.doesNotMatch(appJs, /COPYRIGHT © 2026/);
   assert.match(appJs, /快来测测我们的饭桌默契度/);
   assert.doesNotMatch(appJs, /navigator\.share/);
   assert.match(previewCss, /\.share-preview-overlay/);
@@ -58,4 +66,12 @@ test('client modules are served to the browser', async (t) => {
   const response = await fetch(`http://127.0.0.1:${app.address().port}/modules/foods.js`);
   assert.equal(response.status, 200);
   assert.match(await response.text(), /export const FOODS/);
+});
+
+test('brand logo is served as a transparent PNG asset', async (t) => {
+  const app = createAppServer(); await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve)); t.after(() => app.close());
+  const response = await fetch(`http://127.0.0.1:${app.address().port}/assets/picky-logo.png`);
+  assert.equal(response.status, 200);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  assert.deepEqual([...bytes.slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
 });
