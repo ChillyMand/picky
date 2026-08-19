@@ -8,6 +8,8 @@ import { createVisitorId, clearProgress, copyText } from '/modules/browser-compa
 import { CHOICES, INTRO_CHOICE_DETAILS } from '/modules/choice-copy.js';
 import { progressPromptFor } from '/modules/progress-prompts.js';
 import { buildShareInviteCopy } from '/modules/share-copy.js';
+import { ANSWER_FEEDBACK_MS, answerFeedbackState } from '/modules/answer-feedback.js';
+import { shouldLockPageScroll } from '/modules/screen-mode.js';
 
 const app = document.querySelector('#app');
 const STORAGE_KEY = 'picky-test-progress-v1';
@@ -17,11 +19,18 @@ let pendingPairCode = normalizePublicCode(new URLSearchParams(location.search).g
 let pendingWrites = [];
 let questionStartedAt = Date.now();
 let brandLogoPromise;
+let answerTransitioning = false;
 
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 function clear() { clearProgress(globalThis.localStorage, STORAGE_KEY); }
 function escapeHtml(value = '') { return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]); }
-function screen(content, className = '') { app.innerHTML = `<section class="screen ${className}">${content}</section>`; window.scrollTo({ top: 0, behavior: 'smooth' }); }
+function screen(content, className = '') {
+  const lockScroll = shouldLockPageScroll(className);
+  document.body.classList.remove('question-active');
+  window.scrollTo({ top: 0, behavior: 'auto' });
+  app.innerHTML = `<section class="screen ${className}">${content}</section>`;
+  document.body.classList.toggle('question-active', lockScroll);
+}
 function showToast(message) { const node = document.createElement('div'); node.className = 'toast'; node.textContent = message; document.body.append(node); setTimeout(() => node.remove(), 1800); }
 function brandLockup() { return '<div class="brand-lockup brand-lockup-hero"><img src="/assets/picky-logo.png" alt=""><span class="brand-word">PICKY<span class="brand-bang">!</span></span></div>'; }
 function questionBrand() { return '<div class="brand-lockup question-brand"><img src="/assets/picky-logo.png" alt=""><span class="brand-word">PICKY<span class="brand-bang">!</span></span></div>'; }
@@ -46,9 +55,10 @@ function questionCopy(food) {
 function kindFor(id) { return createInitialQueue().includes(id) ? 'initial' : ['zheergen', 'pig_brain', 'fish_head', 'snail_noodle', 'oyster', 'bitter_melon'].includes(id) ? 'confirmation' : 'follow_up'; }
 
 function showQuestion() {
+  answerTransitioning = false;
   const id = state.queue[state.index]; const food = getFoodById(id); if (!food) return finish();
   questionStartedAt = Date.now(); const progress = Math.min(96, Math.round((state.answers.length / 54) * 100));
-  screen(`<div class="question-header">${questionBrand()}<span>已完成 ${state.answers.length} 题</span></div><div class="question-progress-row"><span class="zone-label">${escapeHtml(food.category)}</span><div class="progress"><span style="width:${progress}%"></span></div></div><div class="food-card"><span class="emoji" aria-hidden="true">${food.emoji}</span>${food.challenge >= 3 ? '<span class="challenge">经典难题</span>' : ''}</div><h1 class="question-title">${escapeHtml(questionCopy(food))}</h1><div class="answers">${CHOICES.map(({ value, emoji, label, hint }) => `<button class="answer-button" data-choice="${value}"><span class="answer-main"><span aria-hidden="true">${emoji}</span> ${label}</span><small class="answer-hint">${hint}</small></button>`).join('')}</div>${state.index ? '<button class="secondary-button back-button" data-action="back">← 上一题</button>' : ''}`, 'question-screen');
+  screen(`<div class="question-header">${questionBrand()}<span>已完成 ${state.answers.length} 题</span></div><div class="question-progress-row"><span class="zone-label">${escapeHtml(food.category)}</span><div class="progress"><span style="width:${progress}%"></span></div></div><div class="food-card"><span class="emoji" aria-hidden="true">${food.emoji}</span>${food.challenge >= 3 ? '<span class="challenge">经典难题</span>' : ''}</div><h1 class="question-title">${escapeHtml(questionCopy(food))}</h1><div class="answers">${CHOICES.map(({ value, emoji, label, hint }) => `<button class="answer-button" data-choice="${value}" aria-pressed="false"><span class="answer-feedback" hidden>已选择</span><span class="answer-main"><span aria-hidden="true">${emoji}</span> ${label}</span><small class="answer-hint">${hint}</small></button>`).join('')}</div>${state.index ? '<button class="secondary-button back-button" data-action="back">← 上一题</button>' : ''}`, 'question-screen');
 }
 
 function archiveAnswer(answer) {
@@ -65,6 +75,23 @@ function answer(choice) {
   if (state.answers.length >= 54 || state.index >= state.queue.length) return finish();
   if (progressPromptFor(state.answers.length)) return showFeedback();
   showQuestion();
+}
+
+async function selectAnswer(button) {
+  if (answerTransitioning) return;
+  answerTransitioning = true;
+  const buttons = [...document.querySelectorAll('.answer-button')];
+  const feedback = answerFeedbackState(button.dataset.choice, buttons.map((item) => item.dataset.choice));
+  for (const item of buttons) {
+    const itemState = feedback[item.dataset.choice];
+    item.classList.toggle('is-selected', itemState.selected);
+    item.classList.toggle('is-dimmed', itemState.dimmed);
+    item.disabled = itemState.disabled;
+    item.setAttribute('aria-pressed', String(itemState.selected));
+    item.querySelector('.answer-feedback').hidden = !itemState.selected;
+  }
+  await new Promise((resolve) => setTimeout(resolve, ANSWER_FEEDBACK_MS));
+  answer(button.dataset.choice);
 }
 
 function showFeedback() {
@@ -150,7 +177,7 @@ async function downloadCard() {
 }
 
 app.addEventListener('click', async (event) => {
-  const choiceButton = event.target.closest('[data-choice]'); if (choiceButton) return answer(choiceButton.dataset.choice);
+  const choiceButton = event.target.closest('[data-choice]'); if (choiceButton) return selectAnswer(choiceButton);
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (action === 'show-intro') showIntro(); else if (action === 'join-pair') joinPair(); else if (action === 'lookup-match') lookupMatch(); else if (action === 'lookup-result-match') lookupResultMatch(); else if (action === 'home') location.href = '/'; else if (action === 'start') { try { await createSession(); } catch { showToast('暂时无法开始，请重试'); } } else if (action === 'continue') showQuestion(); else if (action === 'back') { state.index = Math.max(0, state.index - 1); showQuestion(); } else if (action === 'finish') finish(); else if (action === 'share') shareResult(); else if (action === 'copy-pair') copyPair(); else if (action === 'check-pair') checkPair(); else if (action === 'download') downloadCard(); else if (action === 'restart') { clear(); pendingPairCode = ''; history.replaceState(null, '', '/'); showIntro(); }
 });

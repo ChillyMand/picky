@@ -15,9 +15,22 @@
 .question-progress-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; margin-top: 12px; }
 .question-progress-row .progress { margin-top: 0; }
 .answer-button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.answer-button { position: relative; }
 .answer-main { display: block; }
 .answer-hint { display: block; color: var(--muted); font-size: 12px; font-weight: 650; line-height: 1.25; }
 .answer-button:hover .answer-hint, .answer-button:focus-visible .answer-hint { color: var(--ink); }
+.answer-feedback { position: absolute; top: 5px; right: 7px; padding: 2px 5px; border: 1px solid var(--line); border-radius: 99px; background: var(--paper); color: var(--ink); font-size: 9px; line-height: 1; opacity: 0; transform: scale(.8); transition: opacity .12s, transform .12s; }
+.answer-button.is-selected { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 var(--line); }
+.answer-button.is-selected .answer-feedback { opacity: 1; transform: scale(1); }
+.answer-button.is-selected[data-choice="love"] { background: var(--lime); }
+.answer-button.is-selected[data-choice="okay"] { background: var(--blue); }
+.answer-button.is-selected[data-choice="refuse"] { background: var(--pink); }
+.answer-button.is-selected[data-choice="unknown"] { background: #ffe38a; }
+.answer-button.is-dimmed { opacity: .42; transform: scale(.97); }
+body.question-active { position: fixed; inset: 0; width: 100%; height: 100dvh; overflow: hidden; overscroll-behavior: none; }
+body.question-active .app-shell { height: 100dvh; min-height: 0; overflow: hidden; }
+body.question-active .site-footer { display: none; }
+.question-screen { height: 100dvh; min-height: 0; overflow: hidden; overscroll-behavior: none; touch-action: manipulation; }
 .site-footer { width: min(100%, 720px); margin: 0 auto; padding: 12px 20px max(16px, env(safe-area-inset-bottom)); background: #fff7e7; color: #9a8f82; text-align: center; font-size: 10px; font-weight: 700; letter-spacing: .08em; }
 .admin-brand { color: #fff; margin-bottom: 38px; }
 .admin-brand img { width: 42px; height: 42px; }
@@ -25,6 +38,8 @@
 .admin-brand .brand-word > span { color: #f3654a; }
 .admin-footer { width: 100%; max-width: none; background: #f4f1e9; }
 @media (max-width: 480px) {
+  .intro-screen .brand-lockup-hero img { width: 68px; height: 68px; }
+  .intro-screen .brand-lockup-hero .brand-word { font-size: 32px; }
   .brand-lockup-hero img { width: 52px; height: 52px; }
   .brand-lockup-hero .brand-word { font-size: 25px; }
   .hero-food img { width: 102px; height: 102px; }
