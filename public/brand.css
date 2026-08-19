@@ -9,6 +9,15 @@
 .share-card-brand { justify-content: center; position: relative; z-index: 1; }
 .share-card-brand img { width: 42px; height: 42px; }
 .share-card-brand .brand-word { font-size: 24px; }
+.question-brand img { width: 32px; height: 32px; }
+.question-brand .brand-word { font-size: 19px; }
+.question-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; color: var(--muted); font-size: 13px; font-weight: 800; }
+.question-progress-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; margin-top: 12px; }
+.question-progress-row .progress { margin-top: 0; }
+.answer-button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.answer-main { display: block; }
+.answer-hint { display: block; color: var(--muted); font-size: 12px; font-weight: 650; line-height: 1.25; }
+.answer-button:hover .answer-hint, .answer-button:focus-visible .answer-hint { color: var(--ink); }
 .site-footer { width: min(100%, 720px); margin: 0 auto; padding: 12px 20px max(16px, env(safe-area-inset-bottom)); background: #fff7e7; color: #9a8f82; text-align: center; font-size: 10px; font-weight: 700; letter-spacing: .08em; }
 .admin-brand { color: #fff; margin-bottom: 38px; }
 .admin-brand img { width: 42px; height: 42px; }

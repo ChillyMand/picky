@@ -23,10 +23,10 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(html, /输入好友配对码/);
   assert.match(html, /开始双人匹配/);
   assert.match(html, /touch-fixes\.css\?v=2/);
-  assert.match(html, /intro-compact\.css\?v=1/);
+  assert.match(html, /intro-compact\.css\?v=2/);
   assert.match(html, /share-preview\.css\?v=1/);
-  assert.match(html, /brand\.css\?v=2/);
-  assert.match(html, /app\.js\?v=brand1/);
+  assert.match(html, /brand\.css\?v=3/);
+  assert.match(html, /app\.js\?v=flow2/);
   assert.match(html, /\/assets\/picky-logo\.png/);
   assert.match(html, /COPYRIGHT © 2026 WZRICE\.CN · ALL RIGHTS RESERVED/);
   assert.match(html, /直接查看匹配度/);
@@ -53,11 +53,14 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(appJs, /context\.drawImage\(brandLogo/);
   assert.doesNotMatch(appJs, /MY TABLE PERSONALITY/);
   assert.doesNotMatch(appJs, /COPYRIGHT © 2026/);
-  assert.match(appJs, /快来测测我们的饭桌默契度/);
+  assert.match(appJs, /buildShareInviteCopy/);
+  assert.match(appJs, /question-brand/);
+  assert.match(appJs, /answer-hint/);
   assert.doesNotMatch(appJs, /navigator\.share/);
   assert.match(previewCss, /\.share-preview-overlay/);
   assert.match(compactCss, /max-height:\s*760px/);
-  assert.match(compactCss, /\.intro-screen \.rules\s*\{[^}]*grid-template-columns:\s*1fr 1fr/);
+  assert.match(compactCss, /\.intro-screen \.rules\s*\{[^}]*grid-template-columns:\s*1fr/);
+  assert.match(compactCss, /\.intro-screen \.rule small\s*\{[^}]*font-size:\s*13px/);
   assert.doesNotMatch(appJs, /JSON\.parse\(localStorage\.getItem\(STORAGE_KEY\)\)/);
 });
 

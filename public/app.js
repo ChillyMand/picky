@@ -5,11 +5,11 @@ import { buildShareCardModel, buildPairInviteUrl } from '/modules/share.js';
 import { pickShareTheme } from '/modules/share-themes.js';
 import { normalizePublicCode, isPublicCode } from '/modules/codes.js';
 import { createVisitorId, clearProgress, copyText } from '/modules/browser-compat.js';
+import { CHOICES, INTRO_CHOICE_DETAILS } from '/modules/choice-copy.js';
+import { progressPromptFor } from '/modules/progress-prompts.js';
+import { buildShareInviteCopy } from '/modules/share-copy.js';
 
 const app = document.querySelector('#app');
-const CHOICES = [
-  ['love', '😋', '超爱吃'], ['okay', '🙂', '可以吃'], ['refuse', '😖', '坚决不吃'], ['unknown', '❓', '没吃过'],
-];
 const STORAGE_KEY = 'picky-test-progress-v1';
 const visitorId = createVisitorId(globalThis.localStorage);
 let state = { sessionId: null, publicCode: null, pairCode: null, match: null, answers: [], queue: buildQuestionQueue([]), index: 0, result: null };
@@ -24,10 +24,11 @@ function escapeHtml(value = '') { return String(value).replace(/[&<>"']/g, (char
 function screen(content, className = '') { app.innerHTML = `<section class="screen ${className}">${content}</section>`; window.scrollTo({ top: 0, behavior: 'smooth' }); }
 function showToast(message) { const node = document.createElement('div'); node.className = 'toast'; node.textContent = message; document.body.append(node); setTimeout(() => node.remove(), 1800); }
 function brandLockup() { return '<div class="brand-lockup brand-lockup-hero"><img src="/assets/picky-logo.png" alt=""><span class="brand-word">PICKY<span class="brand-bang">!</span></span></div>'; }
+function questionBrand() { return '<div class="brand-lockup question-brand"><img src="/assets/picky-logo.png" alt=""><span class="brand-word">PICKY<span class="brand-bang">!</span></span></div>'; }
 function loadBrandLogo() { if (!brandLogoPromise) brandLogoPromise = new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = reject; image.src = '/assets/picky-logo.png'; }); return brandLogoPromise; }
 
 function showIntro() {
-  screen(`${pendingPairCode ? `<div class="pair-banner">正在加入配对 <strong>${escapeHtml(pendingPairCode)}</strong>，完成测试即可查看你们的匹配度。</div>` : ''}${brandLockup()}<h1>先对一下暗号</h1><p class="intro-copy">不考虑具体做法，只回答你平时愿不愿意吃。</p><div class="rules">${CHOICES.map(([, emoji, label], index) => `<div class="rule"><strong>${emoji} ${label}</strong><small>${['看到会主动夹', '有就吃，没有也行', '会挑出来或直接拒绝', '暂时无法判断'][index]}</small></div>`).join('')}</div><div class="friendly-note">没有正确答案，挑食也不扣饭票。</div><button class="primary-button" data-action="start">${pendingPairCode ? '开始配对测试' : '我准备好了'} →</button><button class="secondary-button" data-action="home">返回首页</button>`, 'intro-screen');
+  screen(`${pendingPairCode ? `<div class="pair-banner">正在加入配对 <strong>${escapeHtml(pendingPairCode)}</strong>，完成测试即可查看你们的匹配度。</div>` : ''}${brandLockup()}<h1>先对一下暗号</h1><p class="intro-copy">不考虑具体做法，只回答你平时愿不愿意吃。</p><div class="rules">${CHOICES.map(({ emoji, label }, index) => `<div class="rule"><strong>${emoji} ${label}</strong><small>${INTRO_CHOICE_DETAILS[index]}</small></div>`).join('')}</div><div class="friendly-note">没有正确答案，挑食也不扣饭票。</div><button class="primary-button" data-action="start">${pendingPairCode ? '开始配对测试' : '我准备好了'} →</button><button class="secondary-button" data-action="home">返回首页</button>`, 'intro-screen');
 }
 
 async function createSession() {
@@ -47,7 +48,7 @@ function kindFor(id) { return createInitialQueue().includes(id) ? 'initial' : ['
 function showQuestion() {
   const id = state.queue[state.index]; const food = getFoodById(id); if (!food) return finish();
   questionStartedAt = Date.now(); const progress = Math.min(96, Math.round((state.answers.length / 54) * 100));
-  screen(`<div class="progress-row"><span class="zone-label">${escapeHtml(food.category)}</span><span>已完成 ${state.answers.length} 题</span></div><div class="progress"><span style="width:${progress}%"></span></div><div class="food-card"><span class="emoji" aria-hidden="true">${food.emoji}</span>${food.challenge >= 3 ? '<span class="challenge">经典难题</span>' : ''}</div><h1 class="question-title">${escapeHtml(questionCopy(food))}</h1><div class="answers">${CHOICES.map(([choice, emoji, label]) => `<button class="answer-button" data-choice="${choice}"><span aria-hidden="true">${emoji}</span> ${label}</button>`).join('')}</div>${state.index ? '<button class="secondary-button back-button" data-action="back">← 上一题</button>' : ''}`, 'question-screen');
+  screen(`<div class="question-header">${questionBrand()}<span>已完成 ${state.answers.length} 题</span></div><div class="question-progress-row"><span class="zone-label">${escapeHtml(food.category)}</span><div class="progress"><span style="width:${progress}%"></span></div></div><div class="food-card"><span class="emoji" aria-hidden="true">${food.emoji}</span>${food.challenge >= 3 ? '<span class="challenge">经典难题</span>' : ''}</div><h1 class="question-title">${escapeHtml(questionCopy(food))}</h1><div class="answers">${CHOICES.map(({ value, emoji, label, hint }) => `<button class="answer-button" data-choice="${value}"><span class="answer-main"><span aria-hidden="true">${emoji}</span> ${label}</span><small class="answer-hint">${hint}</small></button>`).join('')}</div>${state.index ? '<button class="secondary-button back-button" data-action="back">← 上一题</button>' : ''}`, 'question-screen');
 }
 
 function archiveAnswer(answer) {
@@ -62,13 +63,13 @@ function answer(choice) {
   if (extras.length) state.queue.splice(state.index + 1, 0, ...extras);
   state.index += 1; save();
   if (state.answers.length >= 54 || state.index >= state.queue.length) return finish();
-  if ([12, 30, 45].includes(state.answers.length)) return showFeedback();
+  if (progressPromptFor(state.answers.length)) return showFeedback();
   showQuestion();
 }
 
 function showFeedback() {
-  const messages = state.answers.length < 10 ? ['初步判断：你还算好养。', '不过真正的挑战才刚刚开始。'] : ['饭桌人格已经逐渐清晰。', '再来几题，马上宣判。'];
-  screen(`<div class="feedback-sticker">🫣</div><h1>${messages[0]}</h1><p>${messages[1]}</p><button class="primary-button" data-action="continue">继续检查 →</button>`, 'feedback-screen');
+  const prompt = progressPromptFor(state.answers.length);
+  screen(`<div class="feedback-sticker">🫣</div><h1>${prompt.title}</h1><p>${prompt.detail}</p><button class="primary-button" data-action="continue">继续检查 →</button>`, 'feedback-screen');
 }
 
 async function finish() {
@@ -92,7 +93,7 @@ async function joinPair() { const input = document.querySelector('#pair-code-inp
 function showDirectMatch(match) { screen(`<div class="feedback-sticker">🍻</div><p class="eyebrow">${escapeHtml(match.firstCode)} × ${escapeHtml(match.secondCode)}</p><h1>你们的饭桌匹配度</h1><div class="result-card pair-report"><div class="pair-score">${match.score}%</div><p class="verdict">${escapeHtml(match.verdict)}</p><p>共同回答 ${match.overlapCount} 道题</p><div class="pair-lists"><div><h3>😋 都爱吃</h3><p>${match.sharedLikes.map((food) => escapeHtml(food.name)).join('、') || '暂时没有'}</p></div><div><h3>🤝 一起避开</h3><p>${match.sharedAvoids.map((food) => escapeHtml(food.name)).join('、') || '暂时没有'}</p></div><div><h3>⚡ 饭桌分歧</h3><p>${match.conflicts.map((food) => escapeHtml(food.name)).join('、') || '几乎没有'}</p></div></div></div><button class="secondary-button" data-action="home">返回首页</button>`, 'result-screen'); }
 async function lookupMatch() { const first = normalizePublicCode(document.querySelector('#first-match-code')?.value); const second = normalizePublicCode(document.querySelector('#second-match-code')?.value); if (!isPublicCode(first) || !isPublicCode(second) || first === second) return showToast('请输入两个不同的 5 位测试码'); const response = await fetch(`/api/matches?first=${first}&second=${second}`); const payload = await response.json(); if (!response.ok) return showToast(payload.error || '暂时无法查询'); showDirectMatch(payload); }
 async function lookupResultMatch() { const second = normalizePublicCode(document.querySelector('#result-friend-code')?.value); if (!isPublicCode(state.publicCode) || !isPublicCode(second) || state.publicCode === second) return showToast('请输入对方完整的 5 位测试码'); const response = await fetch(`/api/matches?first=${state.publicCode}&second=${second}`); const payload = await response.json(); if (!response.ok) return showToast(payload.error || '暂时无法查询'); state.match = { hostCode: payload.firstCode, guestCode: payload.secondCode, ...payload }; save(); showResult(); }
-async function shareResult() { const copied = await copyText(`快来测测我们的饭桌默契度！我的配对码是 ${state.publicCode}：${pairUrl()}`); showToast(copied ? '邀请文案和链接已复制' : '复制失败，请长按配对码复制'); }
+async function shareResult() { const copied = await copyText(buildShareInviteCopy(pairUrl())); showToast(copied ? '邀请文案和链接已复制' : '复制失败，请长按配对码复制'); }
 function showImagePreview(imageUrl, filename) {
   document.querySelector('.share-preview-overlay')?.remove();
   const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
