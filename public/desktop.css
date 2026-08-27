@@ -1,0 +1,52 @@
+.app-shell { width: min(100%, 1180px); }
+.home-desktop-grid { display: block; }
+.question-screen { width: min(100%, 960px); margin-inline: auto; }
+.result-screen { width: min(100%, 980px); margin-inline: auto; }
+.intro-screen,
+.feedback-screen,
+.loading-screen { width: min(100%, 820px); margin-inline: auto; }
+.site-footer { width: min(100%, 1180px); }
+
+@media (min-width: 900px) {
+  .screen { padding: 34px 58px 42px; }
+  .home-screen { min-height: 100vh; }
+  .home-screen .mini-nav { flex: 0 0 auto; }
+  .home-desktop-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(360px, .92fr) minmax(470px, 1.08fr);
+    gap: clamp(42px, 6vw, 82px);
+    align-items: center;
+    padding: 24px 0 18px;
+  }
+  .home-story { min-width: 0; }
+  .home-story .hero-food { width: 230px; height: 214px; margin: 0 auto 34px; box-shadow: 0 18px 0 var(--shadow); }
+  .home-story .hero-food img { width: 172px; height: 172px; }
+  .home-story .hero-food b { right: -34px; top: 10px; font-size: 13px; }
+  .home-story .eyebrow { font-size: 12px; letter-spacing: 2.5px; }
+  .home-screen h1 { font-size: clamp(58px, 5.2vw, 76px); letter-spacing: -5px; margin: 12px 0 20px; }
+  .home-story .lead { max-width: 480px; font-size: 17px; }
+  .home-story .feature-stickers { margin-bottom: 0; }
+  .home-actions {
+    padding: clamp(26px, 3vw, 38px);
+    border: 3px solid var(--line);
+    border-radius: 28px;
+    background: var(--paper);
+    box-shadow: 10px 10px 0 var(--line);
+    transform: rotate(.25deg);
+  }
+  .home-actions > * { transform: rotate(-.25deg); }
+  .home-actions .primary-button { min-height: 66px; font-size: 19px; }
+  .home-actions .pair-entry { margin-top: 22px; }
+  .home-actions .choice-preview { margin-top: 24px; }
+  .question-screen .answers { grid-template-columns: repeat(4, 1fr); }
+  .question-screen .answer-button { min-height: 86px; padding-inline: 12px; }
+  .result-screen { padding-inline: 70px; }
+}
+
+@media (max-width: 899px) {
+  .app-shell,
+  .site-footer { width: min(100%, 720px); }
+  .home-desktop-grid { display: block; }
+  .home-actions { padding: 0; border: 0; background: transparent; box-shadow: none; transform: none; }
+}

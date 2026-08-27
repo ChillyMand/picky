@@ -28,6 +28,7 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(html, /intro-compact\.css\?v=3/);
   assert.match(html, /share-preview\.css\?v=1/);
   assert.match(html, /brand\.css\?v=4/);
+  assert.match(html, /styles\.css\?v=desktop2/);
   assert.match(html, /app\.js\?v=flow5/);
   assert.match(html, /\/assets\/picky-logo\.png/);
   assert.match(html, /COPYRIGHT © 2026 WZRICE\.CN · ALL RIGHTS RESERVED/);

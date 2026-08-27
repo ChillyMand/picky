@@ -54,4 +54,31 @@
 - [x] Intro, feedback, result, and Admin pages retain normal scrolling.
 - [x] Mobile browser console is clear.
 
+## Desktop landscape and SEO pass — 2026-08-27
+
+### Evidence
+
+- Source visual: `/var/folders/wy/lpzfb1mn4435wl1_8wn9zsvw0000gn/T/codex-clipboard-8286818e-01e5-44b6-8fb2-d3de18530810.png` (2516 × 1326).
+- Production home capture: `/Users/linshuhang/Documents/wzrice网站构建/picky-test/qa-desktop-home-seo.png` (1280 × 720).
+- Production question capture: `/Users/linshuhang/Documents/wzrice网站构建/picky-test/qa-desktop-question-seo.png` (1280 × 720).
+- Full-view comparison: `/Users/linshuhang/Documents/wzrice网站构建/picky-test/qa-desktop-seo-comparison.png`.
+- State: canonical home page and first question after starting a fresh test.
+- Density normalization: the supplied source was proportionally fitted into a 1280 × 720 comparison slot; the production capture remains at native 1280 × 720. The layout change is intentional, so fidelity is judged by preservation of the visual language and correction of the excess side whitespace.
+
+### Findings and fixes
+
+1. The previous 720px mobile column consumed only about one third of a wide landscape screenshot. The home shell now caps at 1180px and uses a real two-region desktop composition.
+2. The left region retains the supplied PICKY identity, cream canvas, bold headline, pink marker, stickers, and food illustration. The right region groups the primary action and both pairing paths into one high-contrast card.
+3. At 1280 × 720, the production shell measures 1180px, leaves only 50px on each side, and has zero horizontal overflow.
+4. The first question uses a centered 960px content width and four equal answer columns, making deliberate use of landscape space without stretching text excessively.
+5. Below 900px the original single-column composition is restored through an explicit breakpoint. Structural regression tests cover this boundary because the browser preview surface remained fixed at 1280px during this pass.
+6. No actionable typography, clipping, border, spacing, contrast, or overflow issue is visible in the combined desktop comparison.
+
+### SEO verification surfaces
+
+- Unique Chinese title and description are present in the initial HTML.
+- Canonical, robots directives, Open Graph, Twitter card, and JSON-LD WebSite/WebApplication data are present.
+- `/robots.txt` references `/sitemap.xml`; the sitemap contains only the canonical root URL.
+- The sitemap XML validates without parser errors.
+
 final result: passed
