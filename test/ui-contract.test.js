@@ -15,6 +15,7 @@ test('user page exposes the complete test flow with visible answer copy and no i
   const touchCss = await fetch(`${base}/touch-fixes.css`).then((response) => response.text());
   const compactCss = await fetch(`${base}/intro-compact.css`).then((response) => response.text());
   const previewCss = await fetch(`${base}/share-preview.css`).then((response) => response.text());
+  const protectionCss = await fetch(`${base}/protection.css`).then((response) => response.text());
   const appJs = await fetch(`${base}/app.js`).then((response) => response.text());
   assert.match(html, /你到底有多挑食/);
   for (const label of ['超爱吃', '可以吃', '坚决不吃', '没吃过']) assert.match(html, new RegExp(label));
@@ -29,7 +30,8 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(html, /share-preview\.css\?v=1/);
   assert.match(html, /brand\.css\?v=4/);
   assert.match(html, /styles\.css\?v=desktop2/);
-  assert.match(html, /app\.js\?v=flow5/);
+  assert.match(html, /protection\.css\?v=1/);
+  assert.match(html, /app\.js\?v=protect1/);
   assert.match(html, /\/assets\/picky-logo\.png/);
   assert.match(html, /COPYRIGHT © 2026 WZRICE\.CN · ALL RIGHTS RESERVED/);
   assert.match(html, /直接查看匹配度/);
@@ -37,6 +39,9 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(html, /对方配对码/);
   assert.match(css, /color:\s*var\(--ink\)/);
   assert.match(css, /prefers-reduced-motion/);
+  assert.match(protectionCss, /body\s*\{[^}]*user-select:\s*none/);
+  assert.match(protectionCss, /input,textarea,\[contenteditable="true"\]\s*\{[^}]*user-select:\s*text/);
+  assert.match(protectionCss, /img\s*\{[^}]*-webkit-user-drag:\s*none/);
   assert.match(touchCss, /@media\s*\(hover:\s*none\)/);
   assert.match(touchCss, /\.answer-button:hover[^}]*background:\s*var\(--paper\)/);
   assert.match(appJs, /isPublicCode\(pendingPairCode\).*showIntro/s);
@@ -63,6 +68,8 @@ test('user page exposes the complete test flow with visible answer copy and no i
   assert.match(appJs, /shouldLockPageScroll/);
   assert.match(appJs, /\.querySelector\('\.answer-feedback'\)\.hidden = !itemState\.selected/);
   assert.doesNotMatch(appJs, /navigator\.share/);
+  assert.match(appJs, /addEventListener\('dragstart'.*preventDefault/s);
+  assert.match(appJs, /addEventListener\('contextmenu'.*share-preview-image.*preventDefault/s);
   assert.doesNotMatch(appJs, /visitorId|viewport|navigator\.language|timeZone|document\.referrer/);
   assert.doesNotMatch(`${html}\n${appJs}`, /数据库|接口|存档|统计|后台/);
   assert.match(previewCss, /\.share-preview-overlay/);

@@ -181,6 +181,14 @@ app.addEventListener('click', async (event) => {
   if (action === 'show-intro') showIntro(); else if (action === 'join-pair') joinPair(); else if (action === 'lookup-match') lookupMatch(); else if (action === 'lookup-result-match') lookupResultMatch(); else if (action === 'home') location.href = '/'; else if (action === 'start') { try { await createSession(); } catch { showToast('暂时无法开始，请重试'); } } else if (action === 'continue') showQuestion(); else if (action === 'back') { state.index = Math.max(0, state.index - 1); showQuestion(); } else if (action === 'finish') finish(); else if (action === 'share') shareResult(); else if (action === 'copy-pair') copyPair(); else if (action === 'check-pair') checkPair(); else if (action === 'download') downloadCard(); else if (action === 'restart') { clear(); pendingPairCode = ''; history.replaceState(null, '', '/'); showIntro(); }
 });
 
+document.addEventListener('dragstart', (event) => {
+  if (event.target.closest?.('img')) event.preventDefault();
+});
+document.addEventListener('contextmenu', (event) => {
+  const image = event.target.closest?.('img');
+  if (image && !image.classList.contains('share-preview-image')) event.preventDefault();
+});
+
 clear();
 if (isPublicCode(pendingPairCode)) showIntro();
 const pairInput = document.querySelector('#pair-code-input'); if (pairInput && pendingPairCode) pairInput.value = pendingPairCode;
