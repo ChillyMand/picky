@@ -3,8 +3,7 @@
   "name": "picky",
   "main": "worker.js",
   "account_id": "16ab0366b94c2e1a89cb3dab3fee4e34",
-  "compatibility_date": "2026-08-11",
-  "observability": { "enabled": true },
+  "compatibility_date": "2026-08-18",
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

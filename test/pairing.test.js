@@ -1,12 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPublicCode, normalizePublicCode } from '../src/codes.js';
+import { createPublicCode, isPublicCode, normalizePublicCode } from '../src/codes.js';
 import { scoreCompatibility } from '../src/matching.js';
 
-test('public test code is five unambiguous uppercase characters', () => {
+test('public test codes use exactly four unambiguous uppercase characters', () => {
   const code = createPublicCode(() => 0.123456);
-  assert.match(code, /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{5}$/);
+  assert.match(code, /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/);
   assert.equal(normalizePublicCode(` ${code.toLowerCase()} `), code);
+  assert.equal(normalizePublicCode('abcde'), 'ABCD');
+  assert.equal(isPublicCode('ABCD'), true);
+  assert.equal(isPublicCode('ABCDE'), false);
 });
 
 test('matching rewards shared preferences and identifies conflicts', () => {
